@@ -1,0 +1,27 @@
+services:
+  ocs:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: sigscale-ocs-local:latest
+    hostname: ocs
+    ports:
+      - "8080:8080/tcp"
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+      - "3868:3868/tcp"
+      - "3869:3869/tcp"
+    environment:
+      OCS_INIT_DB: "true"
+      OCS_NODENAME: "ocs"
+    volumes:
+      - ocs-db:/home/otp/db
+      - ocs-log:/home/otp/log
+      - ocs-ssl:/home/otp/ssl
+      - ocs-snmp:/home/otp/snmp
+
+volumes:
+  ocs-db:
+  ocs-log:
+  ocs-ssl:
+  ocs-snmp:

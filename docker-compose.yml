@@ -1,0 +1,29 @@
+services:
+  ocs:
+    image: sigscale-ocs-local:teste
+    hostname: ocs
+    ports:
+      - "127.0.0.251:8080:8080/tcp"
+      - "127.0.0.251:1812:1812/udp"
+      - "127.0.0.251:1813:1813/udp"
+      - "127.0.0.251:3868:3868/tcp"
+      - "127.0.0.251:3869:3869/tcp"
+    environment:
+      OCS_INIT_DB: "true"
+      OCS_NODENAME: "ocs"
+      OCS_DEBUG: "true"
+      OCS_SYS_CONFIG: "/run/config/ocs/sys.config"
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - ocs-db:/home/otp/db
+      - ocs-log:/home/otp/log
+      - ocs-ssl:/home/otp/ssl
+      - ocs-snmp:/home/otp/snmp
+      - /opt/ocs/sys.config:/run/config/ocs/sys.config:ro
+
+volumes:
+  ocs-db:
+  ocs-log:
+  ocs-ssl:
+  ocs-snmp:

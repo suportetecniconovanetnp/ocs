@@ -164,7 +164,17 @@ do(#mod{method = Method, request_uri = Uri, data = Data} = ModData) ->
 %% @hidden
 parse_query(Resource, ModData, Uri) ->
 	parse_query1(Resource, ModData,
-			uri_string:percent_decode(uri_string:parse(Uri))).
+			decode_uri(Uri)).
+
+%% @hidden
+decode_uri(Uri) ->
+	UriMap = uri_string:parse(Uri),
+	case erlang:function_exported(uri_string, percent_decode, 1) of
+		true ->
+			uri_string:percent_decode(UriMap);
+		false ->
+			UriMap
+	end.
 %% @hidden
 parse_query1(Resource, ModData, #{path := Path, query := Query}) ->
 	do_head(Resource, ModData, string:lexemes(Path, [$/]),
@@ -330,4 +340,3 @@ send(#mod{socket = Socket, socket_type = SocketType} = ModData,
 		StatusCode, Headers, ResponseBody) ->
 	httpd_response:send_header(ModData, StatusCode, Headers),
 	httpd_socket:deliver(SocketType, Socket, ResponseBody).
-
