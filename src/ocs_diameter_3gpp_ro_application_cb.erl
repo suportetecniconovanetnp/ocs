@@ -357,9 +357,13 @@ process_request1(?'3GPP_CC-REQUEST-TYPE_INITIAL_REQUEST' = RequestType,
 		end,
 		Amounts = get_mscc(MSCC1),
 		SessionAttributes = [{'Session-Id', SessionId}],
+		log_session_request(initial, SessionId, SubscriberIDs, Amounts,
+				ServiceType, ServiceNetwork, Address, Direction),
 		case rate(ServiceType, ServiceNetwork, SubscriberIDs, Timestamp,
 				Address, Direction, initial, SessionAttributes, Amounts) of
 			{MSCC2, ResultCode} when is_list(MSCC2) ->
+				log_session_result(initial, SessionId, SubscriberIDs,
+						ResultCode, MSCC2),
 				Reply = diameter_answer(SessionId, MSCC2,
 						ResultCode, OHost, ORealm, RequestType, RequestNum),
 				ok = ocs_log:acct_log(diameter, Server,
@@ -409,9 +413,13 @@ process_request1(?'3GPP_CC-REQUEST-TYPE_UPDATE_REQUEST' = RequestType,
 		end,
 		Amounts = get_mscc(MSCC1),
 		SessionAttributes = [{'Session-Id', SessionId}],
+		log_session_request(interim, SessionId, SubscriberIDs, Amounts,
+				ServiceType, ServiceNetwork, Address, Direction),
 		case rate(ServiceType, ServiceNetwork, SubscriberIDs, Timestamp,
 				Address, Direction, interim, SessionAttributes, Amounts) of
 			{MSCC2, ResultCode} when is_list(MSCC2) ->
+				log_session_result(interim, SessionId, SubscriberIDs,
+						ResultCode, MSCC2),
 				Reply = diameter_answer(SessionId, MSCC2,
 						ResultCode, OHost, ORealm, RequestType, RequestNum),
 				ok = ocs_log:acct_log(diameter, Server,
@@ -469,15 +477,21 @@ process_request1(?'3GPP_CC-REQUEST-TYPE_TERMINATION_REQUEST' = RequestType,
 				Reply;
 			Amounts ->
 				SessionAttributes = [{'Session-Id', SessionId}],
+				log_session_request(final, SessionId, SubscriberIDs, Amounts,
+						ServiceType, ServiceNetwork, Address, Direction),
 				case rate(ServiceType, ServiceNetwork, SubscriberIDs, Timestamp,
 							Address, Direction, final, SessionAttributes, Amounts) of
 					{MSCC2, ResultCode} when is_list(MSCC2) ->
+						log_session_result(final, SessionId, SubscriberIDs,
+								ResultCode, MSCC2),
 						Reply = diameter_answer(SessionId, MSCC2,
 								ResultCode, OHost, ORealm, RequestType, RequestNum),
 						ok = ocs_log:acct_log(diameter, Server,
 								accounting_event_type(RequestType), Request, Reply, undefined),
 						Reply;
 					{MSCC2, ResultCode, Rated} when is_list(Rated) ->
+						log_session_result(final, SessionId, SubscriberIDs,
+								ResultCode, MSCC2),
 						Reply = diameter_answer(SessionId, MSCC2,
 								ResultCode, OHost, ORealm, RequestType, RequestNum),
 						ok = ocs_log:acct_log(diameter, Server,
@@ -900,6 +914,52 @@ get_rg(#'3gpp_ro_Multiple-Services-Credit-Control'{'Rating-Group' = [RG]})
 get_rg(_) ->
 	[].
 
+%% @hidden
+validate_mscc_units(ServiceType, Amounts) ->
+	case expected_service_units(ServiceType) of
+		undefined ->
+			ok;
+		ExpectedUnits ->
+			case invalid_mscc_units(ExpectedUnits, Amounts) of
+				[] ->
+					ok;
+				InvalidUnits ->
+					{error, {invalid_units, ServiceType, ExpectedUnits, InvalidUnits}}
+			end
+	end.
+
+%% @hidden
+expected_service_units(32251) ->
+	[octets];
+expected_service_units(32255) ->
+	[octets];
+expected_service_units(32260) ->
+	[seconds];
+expected_service_units(32275) ->
+	[seconds];
+expected_service_units(32276) ->
+	[seconds];
+expected_service_units(32274) ->
+	[messages];
+expected_service_units(_) ->
+	undefined.
+
+%% @hidden
+invalid_mscc_units(ExpectedUnits, Amounts) ->
+	lists:usort(lists:flatten([invalid_mscc_units1(ExpectedUnits, Amount)
+			|| Amount <- Amounts])).
+
+%% @hidden
+invalid_mscc_units1(ExpectedUnits, {_ServiceId, _RatingGroup, Used, Reserve}) ->
+	[Units || {Units, _} <- normalize_units(Used) ++ normalize_units(Reserve),
+			not lists:member(Units, ExpectedUnits)].
+
+%% @hidden
+normalize_units(undefined) ->
+	[];
+normalize_units(Amounts) when is_list(Amounts) ->
+	Amounts.
+
 -spec rate(ServiceType, ServiceNetwork, SubscriberIDs, Timestamp,
 		Address, Direction, Flag, SessionAttributes, Amounts) -> Result
 	when
@@ -927,9 +987,14 @@ get_rg(_) ->
 %% @hidden
 rate(ServiceType, ServiceNetwork, SubscriberIDs, Timestamp,
 		Address, Direction, Flag, SessionAttributes, Amounts) ->
-	rate(ServiceType, ServiceNetwork, SubscriberIDs, Timestamp,
-			Address, Direction, Flag, SessionAttributes,
-			Amounts, [], undefined, undefined).
+	case validate_mscc_units(ServiceType, Amounts) of
+		ok ->
+			rate(ServiceType, ServiceNetwork, SubscriberIDs, Timestamp,
+					Address, Direction, Flag, SessionAttributes,
+					Amounts, [], undefined, undefined);
+		{error, _} = Error ->
+			Error
+	end.
 %% @hidden
 rate(ServiceType, ServiceNetwork, SubscriberIDs,
 		Timestamp, Address, Direction, Flag, SessionAttributes,
@@ -946,9 +1011,11 @@ rate(ServiceType, ServiceNetwork, SubscriberIDs,
 		[N2] ->
 			{SessionAttributes ++ [{rg, N2}], N2}
 	end,
+	Debits1 = normalize_debits(Flag, SubscriberIDs, ServiceId,
+			ChargingKey, SessionAttributes1, Debits),
 	case ocs_rating:rate(diameter, ServiceType, ServiceId, ChargingKey,
 			ServiceNetwork, SubscriberIDs, Timestamp, Address, Direction, Flag,
-			Debits, Reserves, SessionAttributes1) of
+			Debits1, Reserves, SessionAttributes1) of
 		{ok, _, {seconds, Amount} = _GrantedAmount} when Amount > 0 ->
 			ResultCode2 = ?'DIAMETER_BASE_RESULT-CODE_SUCCESS',
 			GSU = #'3gpp_ro_Granted-Service-Unit'{'CC-Time' = [Amount]},
@@ -1160,6 +1227,88 @@ rate(_, _, _, _, _, _, _, _, [], Acc, ResultCode, undefined) ->
 rate(_, _, _, _, _, _, _, _, [], Acc, ResultCode, Rated) ->
 	{lists:reverse(Acc), ResultCode, Rated}.
 
+%% @hidden
+normalize_debits(initial, _SubscriberIDs, _ServiceId,
+		_ChargingKey, _SessionAttributes, Debits) ->
+	Debits;
+normalize_debits(event, _SubscriberIDs, _ServiceId,
+		_ChargingKey, _SessionAttributes, Debits) ->
+	Debits;
+normalize_debits(_Flag, _SubscriberIDs, _ServiceId,
+		_ChargingKey, _SessionAttributes, [] = Debits) ->
+	Debits;
+normalize_debits(Flag, SubscriberIDs, ServiceId,
+		ChargingKey, SessionAttributes, Debits)
+		when Flag == interim; Flag == final ->
+	case application:get_env(ocs, diameter_ro_usu_mode, incremental) of
+		cumulative ->
+			CurrentDebits = ocs_rating:session_debits(SubscriberIDs,
+					ServiceId, ChargingKey, SessionAttributes),
+			NormalizedDebits = lists:map(fun({Units, Amount}) ->
+					Current = maps:get(Units, CurrentDebits, 0),
+					{Units, erlang:max(Amount - Current, 0)}
+			end, Debits),
+			debug_session_report(["DIAMETER Ro debit normalization",
+					{module, ?MODULE},
+					{event_type, Flag},
+					{session_id, proplists:get_value('Session-Id',
+							SessionAttributes)},
+					{mode, cumulative},
+					{service_id, ServiceId},
+					{charging_key, ChargingKey},
+					{subscriber, print_sub(SubscriberIDs)},
+					{reported_debits, Debits},
+					{current_debits, CurrentDebits},
+					{normalized_debits, NormalizedDebits}]),
+			NormalizedDebits;
+		_ ->
+			debug_session_report(["DIAMETER Ro debit normalization",
+					{module, ?MODULE},
+					{event_type, Flag},
+					{session_id, proplists:get_value('Session-Id',
+							SessionAttributes)},
+					{mode, incremental},
+					{service_id, ServiceId},
+					{charging_key, ChargingKey},
+					{subscriber, print_sub(SubscriberIDs)},
+					{reported_debits, Debits},
+					{normalized_debits, Debits}]),
+			Debits
+	end.
+
+%% @hidden
+log_session_request(EventType, SessionId, SubscriberIDs, Amounts,
+		ServiceType, ServiceNetwork, Address, Direction) ->
+	debug_session_report(["DIAMETER Ro session request",
+			{module, ?MODULE},
+			{event_type, EventType},
+			{session_id, SessionId},
+			{subscriber, print_sub(SubscriberIDs)},
+			{service_type, ServiceType},
+			{service_network, ServiceNetwork},
+			{address, Address},
+			{direction, Direction},
+			{amounts, Amounts}]).
+
+%% @hidden
+log_session_result(EventType, SessionId, SubscriberIDs, ResultCode, Amounts) ->
+	debug_session_report(["DIAMETER Ro session result",
+			{module, ?MODULE},
+			{event_type, EventType},
+			{session_id, SessionId},
+			{subscriber, print_sub(SubscriberIDs)},
+			{result_code, ResultCode},
+			{returned_amounts, Amounts}]).
+
+%% @hidden
+debug_session_report(Report) ->
+	case application:get_env(ocs, session_debug_logs, false) of
+		true ->
+			error_logger:info_report(Report);
+		_ ->
+			ok
+	end.
+
 -spec fui(RedirectServerAddress) -> Result
 	when
 		RedirectServerAddress :: string(),
@@ -1293,4 +1442,3 @@ tbcd(<<A2:4, A1:4, Rest/binary>>, Acc)
 	tbcd(Rest, [A2 + 48, A1 + 48 | Acc]);
 tbcd(<<>>, Acc) ->
 	lists:reverse(Acc).
-

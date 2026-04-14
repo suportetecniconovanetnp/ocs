@@ -979,4 +979,3 @@ following environment variables:
             {document_root, "/usr/lib/erlang/lib/ocs-%VERSION%/priv/www"}]}]}]}].
 
 '''
-

@@ -23,7 +23,7 @@
 
 -export([rate/13, charge/11]).
 -export([authorize/8]).
--export([session_attributes/1]).
+-export([session_attributes/1, session_debits/4]).
 -export([filter_prices_tod/2, filter_prices_key/2]).
 
 -include("ocs.hrl").
@@ -1415,6 +1415,35 @@ charge2(Protocol, event = Flag,
 %% @doc Apply debit and reserve to provided buckets.
 %% @hidden
 charge3(initial, _Service, ServiceId,
+		Product, Buckets,
+		#price{units = Units} = Price,
+		{_, 0} = DebitAmount, {Units, _Amount} = ReserveAmount,
+		SessionId, ChargingKey, Overflow)
+		when is_record(_Service, service),
+		_Service#service.multisession == false,
+		length(_Service#service.session_attributes) > 0 ->
+	CurrentSessionId = get_session_id(SessionId),
+	ExistingSessions = remove_session(CurrentSessionId,
+			_Service#service.session_attributes),
+	case ExistingSessions of
+		[] ->
+			charge3(initial, _Service, ServiceId, Product, Buckets, Price,
+					DebitAmount, ReserveAmount, SessionId, ChargingKey,
+					Overflow);
+		_ ->
+			Buckets1 = refund_session_list(ServiceId, ChargingKey,
+					ExistingSessions, Buckets),
+			debug_session_report(["OCS stale session cleanup",
+					{module, ?MODULE},
+					{subscriber, _Service#service.name},
+					{incoming_session, format_session_id(SessionId)},
+					{released_sessions, format_active_sessions(ExistingSessions)},
+					{state, session_state(Buckets1, ServiceId, ChargingKey, SessionId)}]),
+			charge3(initial, _Service#service{session_attributes = []},
+					ServiceId, Product, Buckets1, Price, DebitAmount,
+					ReserveAmount, SessionId, ChargingKey, Overflow)
+	end;
+charge3(initial, _Service, ServiceId,
 		#product{id = ProductId} = _Product, Buckets,
 		#price{units = Units, size = UnitSize,
 				amount = UnitPrice} = _Price,
@@ -1695,6 +1724,10 @@ charge4(final = _Flag,
 		{Units, 0}, {Units, 0}, SessionId, Rated, ChargingKey,
 		OldBuckets) when Charged >= Charge ->
 	Refund = {Units, Charged - Charge},
+	session_log(final_before_refund,
+			[{reported_charge, {Units, Charge}},
+			{reported_used, {Units, Charged}},
+			{refund, Refund}], ServiceId, ChargingKey, SessionId, Buckets),
 	{Debits, NewBuckets} = get_final(ServiceId,
 			ChargingKey, SessionId, Refund, Buckets),
 	{NewBRefs, DeletedBuckets}
@@ -1704,12 +1737,23 @@ charge4(final = _Flag,
 	NewSessionList = remove_session(get_session_id(SessionId), SessionList),
 	Service2 = Service1#service{session_attributes = NewSessionList},
 	ok = mnesia:write(Service2),
+	session_log(final_after_refund,
+			[{reported_charge, {Units, Charge}},
+			{reported_used, {Units, Charged}},
+			{refund, Refund},
+			{debited_total, Debits},
+			{deleted_buckets, DeletedBuckets}], ServiceId, ChargingKey,
+			SessionId, NewBuckets),
 	{ok, Service2, Rated1, DeletedBuckets,
 			accumulated_balance(NewBuckets, Product#product.id)};
 charge4(final = _Flag,
 		#service{session_attributes = SessionList} = Service1, ServiceId,
 		Product, Buckets, {Units, _Charge}, {Units, _Charged},
 		{Units, 0}, {Units, 0}, SessionId, Rated, ChargingKey, OldBuckets) ->
+	session_log(final_before_close,
+			[{reported_charge, {Units, _Charge}},
+			{reported_used, {Units, _Charged}},
+			{refund, {Units, 0}}], ServiceId, ChargingKey, SessionId, Buckets),
 	{Debits, NewBuckets} = get_final(ServiceId,
 			ChargingKey, SessionId, {Units, 0}, Buckets),
 	{NewBRefs, DeletedBuckets}
@@ -1718,6 +1762,13 @@ charge4(final = _Flag,
 	Rated1 = rated(Debits, Rated),
 	Service2 = Service1#service{session_attributes = []},
 	ok = mnesia:write(Service2),
+	session_log(final_after_close,
+			[{reported_charge, {Units, _Charge}},
+			{reported_used, {Units, _Charged}},
+			{refund, {Units, 0}},
+			{debited_total, Debits},
+			{deleted_buckets, DeletedBuckets}], ServiceId, ChargingKey,
+			SessionId, NewBuckets),
 	{out_of_credit, SessionList, Rated1, DeletedBuckets,
 			accumulated_balance(NewBuckets, Product#product.id)};
 charge4(_Flag,
@@ -1726,12 +1777,25 @@ charge4(_Flag,
 		{Units, _Reserve}, {Units, _Reserved}, SessionId, _Rated,
 		ChargingKey, OldBuckets) ->
 % @todo charge final reported usage
+	session_log(disabled_before_refund,
+			[{reported_charge, {Units, _Charge}},
+			{reported_used, {Units, _Charged}},
+			{requested_buffer, {Units, _Reserve}},
+			{granted_buffer, {Units, _Reserved}}], ServiceId,
+			ChargingKey, SessionId, Buckets),
 	NewBuckets = refund(ServiceId, ChargingKey, SessionId, Buckets),
 	{NewBRefs, DeletedBuckets}
 			= update_buckets(Product#product.balance, OldBuckets, NewBuckets),
 	ok = mnesia:write(Product#product{balance = NewBRefs}),
 	Service2 = Service1#service{session_attributes = []},
 	ok = mnesia:write(Service2),
+	session_log(disabled_after_refund,
+			[{reported_charge, {Units, _Charge}},
+			{reported_used, {Units, _Charged}},
+			{requested_buffer, {Units, _Reserve}},
+			{granted_buffer, {Units, _Reserved}},
+			{deleted_buckets, DeletedBuckets}], ServiceId,
+			ChargingKey, SessionId, NewBuckets),
 	{disabled, SessionList, DeletedBuckets,
 			accumulated_balance(NewBuckets, Product#product.id)};
 charge4(Flag,
@@ -1740,41 +1804,77 @@ charge4(Flag,
 		{Units, Reserve}, {Units, Reserved}, SessionId, _Rated,
 		ChargingKey, OldBuckets)
 		when ((Flag == initial) or (Flag == interim)),
-		Charged < Charge; Reserved < Reserve ->
+		Charged < Charge; ((Reserve > 0) and (Reserved =< 0)) ->
+	session_log(out_of_credit_before_refund,
+			[{event_type, Flag},
+			{reported_charge, {Units, Charge}},
+			{reported_used, {Units, Charged}},
+			{requested_buffer, {Units, Reserve}},
+			{granted_buffer, {Units, Reserved}}], ServiceId,
+			ChargingKey, SessionId, Buckets),
 	NewBuckets = refund(ServiceId, ChargingKey, SessionId, Buckets),
 	{NewBRefs, DeletedBuckets}
 			= update_buckets(Product#product.balance, OldBuckets, NewBuckets),
 	ok = mnesia:write(Product#product{balance = NewBRefs}),
 	Service2 = Service1#service{session_attributes = []},
 	ok = mnesia:write(Service2),
+	session_log(out_of_credit_after_refund,
+			[{event_type, Flag},
+			{reported_charge, {Units, Charge}},
+			{reported_used, {Units, Charged}},
+			{requested_buffer, {Units, Reserve}},
+			{granted_buffer, {Units, Reserved}},
+			{deleted_buckets, DeletedBuckets}], ServiceId,
+			ChargingKey, SessionId, NewBuckets),
 	{out_of_credit, SessionList, DeletedBuckets,
 			accumulated_balance(NewBuckets, Product#product.id)};
 charge4(initial = _Flag,
 		#service{session_attributes = SessionList} = Service1,
-		_ServiceId, Product, Buckets, {Units, 0},
+		ServiceId, Product, Buckets, {Units, 0},
 		{Units, 0}, {Units, _Reserve}, {Units, Reserved},
-		SessionId, _Rated,  _ChargingKey, OldBuckets) ->
+		SessionId, _Rated, ChargingKey, OldBuckets) ->
 	{NewBRefs, DeletedBuckets}
 			= update_buckets(Product#product.balance, OldBuckets, Buckets),
 	ok = mnesia:write(Product#product{balance = NewBRefs}),
-	case add_session(SessionId, SessionList) of
+	NewSessionList0 = case Service1#service.multisession of
+		false ->
+			add_session(SessionId, []);
+		_ ->
+			add_session(SessionId, SessionList)
+	end,
+	case NewSessionList0 of
 		SessionList ->
+			session_log(initial_grant,
+					[{granted_buffer, {Units, Reserved}},
+					{deleted_buckets, DeletedBuckets}], ServiceId,
+					ChargingKey, SessionId, Buckets),
 			{grant, Service1, {Units, Reserved}, DeletedBuckets,
 					accumulated_balance(Buckets, Product#product.id)};
 		NewSessionList ->
 			Service2 = Service1#service{session_attributes = NewSessionList},
 			ok = mnesia:write(Service2),
+			session_log(initial_grant,
+					[{granted_buffer, {Units, Reserved}},
+					{deleted_buckets, DeletedBuckets}], ServiceId,
+					ChargingKey, SessionId, Buckets),
 			{grant, Service2, {Units, Reserved}, DeletedBuckets,
 					accumulated_balance(Buckets, Product#product.id)}
 	end;
-charge4(interim = _Flag, Service, _ServiceId, Product,
-		Buckets, {Units, _Charge}, {Units, _Charged},
-		{Units, _Reserve}, {Units, Reserved}, _SessionId, _Rated,
-		_ChargingKey, OldBuckets) ->
+charge4(interim = _Flag, Service, ServiceId, Product,
+		Buckets, {Units, Charge}, {Units, Charged},
+		{Units, Reserve}, {Units, Reserved}, SessionId, _Rated,
+		ChargingKey, OldBuckets) ->
 	{NewBRefs, DeletedBuckets}
 			= update_buckets(Product#product.balance, OldBuckets, Buckets),
 	ok = mnesia:write(Product#product{balance = NewBRefs}),
 	ok = mnesia:write(Service),
+	session_log(interim_update,
+			[{reported_charge, {Units, Charge}},
+			{reported_used, {Units, Charged}},
+			{requested_buffer, {Units, Reserve}},
+			{granted_buffer, {Units, Reserved}},
+			{deleted_buckets, DeletedBuckets}], ServiceId, ChargingKey,
+			SessionId, Buckets),
 	{grant, Service, {Units, Reserved}, DeletedBuckets,
 			accumulated_balance(Buckets, Product#product.id)};
 charge4(event = _Flag, Service, _ServiceId, Product, Buckets,
@@ -1788,7 +1888,7 @@ charge4(event = _Flag, Service, _ServiceId, Product, Buckets,
 	{ok, Service, {Units, Charged}, Rated, DeletedBuckets,
 			accumulated_balance(Buckets, Product#product.id)};
 charge4(event = _Flag,
-		#service{session_attributes = SessionList} = Service1,
+		#service{session_attributes = SessionList},
 		_ServiceId, Product, Buckets, {Units, _Charge},
 			{Units, _Charged}, {Units, 0}, {Units, 0},
 		_SessionId, Rated, _ChargingKey, OldBuckets) ->
@@ -2130,6 +2230,8 @@ authorize6(#service{multisession = false, session_attributes = []}
 	Service1 = Service#service{session_attributes =
 		[NewSessionAttributes], disconnect = false},
 	ok = mnesia:write(Service1),
+	log_authorize_session(authorized_new_session, Service1,
+			SessionAttributes, []),
 	{authorized, Service1, Attributes, []};
 authorize6(#service{multisession = false, session_attributes
 		= ExistingAttr} = Service, SessionAttributes, Attributes) ->
@@ -2138,6 +2240,8 @@ authorize6(#service{multisession = false, session_attributes
 	Service1 = Service#service{session_attributes =
 		[NewSessionAttributes], disconnect = false},
 	ok = mnesia:write(Service1),
+	log_authorize_session(replaced_existing_session, Service1,
+			SessionAttributes, ExistingAttr),
 	{authorized, Service1, Attributes, ExistingAttr};
 authorize6(#service{multisession = true, session_attributes
 		= ExistingAttr} = Service, SessionAttributes, Attributes) ->
@@ -2146,6 +2250,8 @@ authorize6(#service{multisession = true, session_attributes
 	Service1 = Service#service{session_attributes =
 		[NewSessionAttributes | ExistingAttr], disconnect = false},
 	ok = mnesia:write(Service1),
+	log_authorize_session(added_multisession, Service1,
+			SessionAttributes, ExistingAttr),
 	{authorized, Service1, Attributes, ExistingAttr}.
 
 -spec session_attributes(Attributes) -> SessionAttributes
@@ -3065,38 +3171,95 @@ radius_reserve(octets, CharValueUse) ->
 		ReserveAmount :: pos_integer().
 %% @doc Get the reserve amount.
 %% @hidden
-reserve_amount(Units, UnitSize, [{Units, ReserveSize} | _])
-		when ReserveSize > UnitSize ->
-	reserve_amount(Units, ReserveSize);
-reserve_amount(Units, UnitSize, [{Units, _ReserveSize} | _]) ->
-	reserve_amount(Units, UnitSize);
+reserve_amount(Units, _UnitSize, [{Units, ReserveSize} | _])
+		when ReserveSize > 0 ->
+	explicit_reserve_amount(Units, ReserveSize);
 reserve_amount(Units, UnitSize, [_ | T]) ->
 	reserve_amount(Units, UnitSize, T);
 reserve_amount(Units, UnitSize, []) ->
-	reserve_amount(Units, UnitSize);
+	default_reserve_amount(Units, UnitSize);
 reserve_amount(_Units, _UnitSize, undefined) ->
 	0.
 %% @hidden
-reserve_amount(octets = _Units, UnitSize) ->
+reserve_amount(Units, UnitSize) ->
+	default_reserve_amount(Units, UnitSize).
+%% @hidden
+default_reserve_amount(octets = _Units, UnitSize) ->
 	case application:get_env(ocs, min_reserve_octets) of
 		{ok, Value} when Value < UnitSize ->
-			UnitSize;
+			clamp_reserve_amount(octets, UnitSize);
 		{ok, Value} ->
-			Value
+			clamp_reserve_amount(octets, Value)
 	end;
-reserve_amount(seconds = _Units, UnitSize) ->
+default_reserve_amount(seconds = _Units, UnitSize) ->
 	case application:get_env(ocs,min_reserve_seconds) of
 		{ok, Value} when Value < UnitSize ->
-			UnitSize;
+			clamp_reserve_amount(seconds, UnitSize);
 		{ok, Value} ->
-			Value
+			clamp_reserve_amount(seconds, Value)
 	end;
-reserve_amount(messages = _Units, UnitSize) ->
+default_reserve_amount(messages = _Units, UnitSize) ->
 	case application:get_env(ocs, min_reserve_messages) of
 		{ok, Value} when Value < UnitSize ->
-			UnitSize;
+			clamp_reserve_amount(messages, UnitSize);
 		{ok, Value} ->
-			Value
+			clamp_reserve_amount(messages, Value)
+	end.
+
+%% @hidden
+clamp_reserve_amount(octets, Amount) ->
+	clamp_reserve_amount(max_reserve_octets, Amount);
+clamp_reserve_amount(seconds, Amount) ->
+	clamp_reserve_amount(max_reserve_seconds, Amount);
+clamp_reserve_amount(messages, Amount) ->
+	clamp_reserve_amount(max_reserve_messages, Amount);
+
+%% @hidden
+clamp_reserve_amount(ConfigKey, Amount) ->
+	case application:get_env(ocs, ConfigKey) of
+		{ok, MaxAmount} when is_integer(MaxAmount), MaxAmount > 0,
+				MaxAmount < Amount ->
+			MaxAmount;
+		_ ->
+			Amount
+	end.
+
+%% @hidden
+explicit_reserve_amount(octets = Units, RequestedAmount) ->
+	case application:get_env(ocs, explicit_reserve_policy, requested) of
+		fixed ->
+			case application:get_env(ocs, explicit_reserve_octets) of
+				{ok, Value} when is_integer(Value), Value > 0 ->
+					Value;
+				_ ->
+					clamp_reserve_amount(Units, RequestedAmount)
+			end;
+		_ ->
+			clamp_reserve_amount(Units, RequestedAmount)
+	end;
+explicit_reserve_amount(seconds = Units, RequestedAmount) ->
+	case application:get_env(ocs, explicit_reserve_policy, requested) of
+		fixed ->
+			case application:get_env(ocs, explicit_reserve_seconds) of
+				{ok, Value} when is_integer(Value), Value > 0 ->
+					Value;
+				_ ->
+					clamp_reserve_amount(Units, RequestedAmount)
+			end;
+		_ ->
+			clamp_reserve_amount(Units, RequestedAmount)
+	end;
+explicit_reserve_amount(messages = Units, RequestedAmount) ->
+	case application:get_env(ocs, explicit_reserve_policy, requested) of
+		fixed ->
+			case application:get_env(ocs, explicit_reserve_messages) of
+				{ok, Value} when is_integer(Value), Value > 0 ->
+					Value;
+				_ ->
+					clamp_reserve_amount(Units, RequestedAmount)
+			end;
+		_ ->
+			clamp_reserve_amount(Units, RequestedAmount)
 	end.
 
 -spec refund(ServiceId, ChargingKey, SessionId, Buckets) -> Buckets
@@ -3109,6 +3272,15 @@ reserve_amount(messages = _Units, UnitSize) ->
 %% @private
 refund(ServiceId, ChargingKey, SessionId, Buckets) ->
 	refund(ServiceId, ChargingKey, SessionId, Buckets, []).
+
+%% @hidden
+refund_session_list(ServiceId, ChargingKey, SessionList, Buckets) ->
+	lists:foldl(fun({_TS, OldSessionId}, AccBuckets) ->
+			refund(ServiceId, ChargingKey, OldSessionId, AccBuckets);
+		(OldSessionId, AccBuckets) ->
+			refund(ServiceId, ChargingKey, OldSessionId, AccBuckets)
+	end, Buckets, SessionList).
+
 %% @hidden
 refund(ServiceId, ChargingKey, SessionId,
 		[#bucket{attributes = Attributes} = H | T], Acc) ->
@@ -3251,6 +3423,140 @@ filter_prices_key(ChargingKey,
 	end;
 filter_prices_key(_, [], Acc1, Acc2) ->
 	lists:reverse(Acc1) ++ lists:reverse(Acc2).
+
+%% @hidden
+session_log(Stage, Extra, ServiceId, ChargingKey, SessionId, Buckets) ->
+	debug_session_report(["OCS session trace",
+			{module, ?MODULE},
+			{stage, Stage},
+			{session_id, format_session_id(SessionId)},
+			{service_id, ServiceId},
+			{charging_key, ChargingKey},
+			{state, session_state(Buckets, ServiceId, ChargingKey, SessionId)}
+			| Extra]).
+
+%% @hidden
+log_authorize_session(Stage, #service{name = SubscriberId,
+		multisession = MultiSession, session_attributes = StoredSessions},
+		SessionAttributes, ExistingAttr) ->
+	debug_session_report(["OCS authorize session",
+			{module, ?MODULE},
+			{stage, Stage},
+			{subscriber, SubscriberId},
+			{multisession, MultiSession},
+			{incoming_session, format_session_id(SessionAttributes)},
+			{existing_sessions, format_active_sessions(ExistingAttr)},
+			{stored_sessions, format_active_sessions(StoredSessions)}]).
+
+%% @hidden
+format_session_id(SessionId) ->
+	case lists:keyfind('Session-Id', 1, SessionId) of
+		{_, Id} ->
+			Id;
+		false ->
+			case lists:keyfind(nrf_ref, 1, SessionId) of
+				{_, Id} ->
+					Id;
+				false ->
+					SessionId
+			end
+	end.
+
+%% @hidden
+format_active_sessions(Sessions) when is_list(Sessions) ->
+	lists:map(fun format_active_session/1, Sessions).
+
+%% @hidden
+format_active_session({Timestamp, SessionId}) ->
+	#{timestamp => Timestamp, session_id => format_session_id(SessionId)};
+format_active_session(SessionId) ->
+	format_session_id(SessionId).
+
+%% @hidden
+debug_session_report(Report) ->
+	case application:get_env(ocs, session_debug_logs, false) of
+		true ->
+			error_logger:info_report(Report);
+		_ ->
+			ok
+	end.
+
+%% @hidden
+session_state(Buckets, ServiceId, ChargingKey, SessionId) ->
+	lists:foldl(fun(Bucket, Acc) ->
+			session_state(Bucket, ServiceId, ChargingKey, SessionId, Acc)
+	end, #{}, Buckets).
+
+%% @hidden
+session_state(#bucket{units = Units, remain_amount = Remain,
+		attributes = Attributes}, ServiceId, ChargingKey, SessionId, Acc) ->
+	State0 = maps:get(Units, Acc,
+			#{available => 0, debited => 0, reserved => 0}),
+	State1 = State0#{available => maps:get(available, State0)
+			+ erlang:max(Remain, 0)},
+	case maps:get(reservations, Attributes, undefined) of
+		Reservations when is_map(Reservations) ->
+			{Debited, Reserved, _} = get_debits(ServiceId,
+					ChargingKey, SessionId, Reservations),
+			Acc#{Units => State1#{debited => maps:get(debited, State1) + Debited,
+					reserved => maps:get(reserved, State1) + Reserved}};
+		_ ->
+			Acc#{Units => State1}
+	end.
+
+-spec session_debits(SubscriberIDs, ServiceId, ChargingKey, SessionId) -> Result
+	when
+		SubscriberIDs :: [string() | binary()],
+		ServiceId :: non_neg_integer() | undefined,
+		ChargingKey :: non_neg_integer() | undefined,
+		SessionId :: [tuple()],
+		Result :: #{octets => non_neg_integer(),
+				seconds => non_neg_integer(),
+				messages => non_neg_integer(),
+				cents => non_neg_integer()} | #{}.
+%% @doc Get total debited units already recorded for a session.
+session_debits(SubscriberIDs, ServiceId, ChargingKey, SessionId) ->
+	F = fun F([SubscriberID | T]) when is_list(SubscriberID) ->
+				F([list_to_binary(SubscriberID) | T]);
+			F([SubscriberID | T]) when is_binary(SubscriberID) ->
+				case mnesia:dirty_read(service, SubscriberID) of
+					[#service{product = ProductId}] ->
+						case mnesia:dirty_read(product, ProductId) of
+							[#product{balance = BucketRefs}] ->
+								Buckets = [ocs:parse_bucket(B)
+										|| Id <- BucketRefs,
+										B <- mnesia:dirty_read(bucket, Id)],
+								lists:foldl(fun(Bucket, Acc) ->
+										session_debits_fold(Bucket,
+												ServiceId, ChargingKey,
+												SessionId, Acc)
+								end, #{}, Buckets);
+							[] ->
+								F(T)
+						end;
+					[] ->
+						F(T)
+				end;
+			F([]) ->
+				#{}
+	end,
+	F(SubscriberIDs).
+
+%% @hidden
+session_debits_fold(#bucket{units = Units,
+		attributes = #{reservations := Reservations}},
+		ServiceId, ChargingKey, SessionId, Acc)
+		when is_map(Reservations) ->
+	{Debited, _Refund, _Reservations} = get_debits(ServiceId,
+			ChargingKey, SessionId, Reservations),
+	case Debited of
+		0 ->
+			Acc;
+		_ ->
+			Acc#{Units => maps:get(Units, Acc, 0) + Debited}
+	end;
+session_debits_fold(_, _, _, _, Acc) ->
+	Acc.
 
 -spec get_final(ServiceId, ChargingKey, SessionId,
 		Refund, Buckets) -> Result
@@ -3746,4 +4052,3 @@ drop_fixed(Prices) ->
 			end
 	end,
 	lists:filter(Filter, Prices).
-
