@@ -65,14 +65,14 @@ pipeline {
                     steps {
                         script {
                             if (env.BUILD_RUNTIME == 'docker') {
-                                sh """
+                                sh '''
                                     docker run --rm \\
-                                      -v "${WORKSPACE}:${WORKSPACE}" \\
-                                      -w "${WORKSPACE}" \\
-                                      -e BUILD_ROOT="${BUILD_ROOT}" \\
-                                      -e ERL_LIBS="${ERL_LIBS}" \\
-                                      -e ERLANG_INSTALL_LIB_DIR="${ERLANG_INSTALL_LIB_DIR}" \\
-                                      erlang:${OTP_VERSION} /bin/bash -lc '
+                                      -v "$WORKSPACE:$WORKSPACE" \\
+                                      -w "$WORKSPACE" \\
+                                      -e BUILD_ROOT="$BUILD_ROOT" \\
+                                      -e ERL_LIBS="$ERL_LIBS" \\
+                                      -e ERLANG_INSTALL_LIB_DIR="$ERLANG_INSTALL_LIB_DIR" \\
+                                      erlang:$OTP_VERSION /bin/bash -lc '
                                         set -eux
                                         apt-get update
                                         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \\
@@ -121,7 +121,7 @@ pipeline {
                                         ../../../configure
                                         make
                                       '
-                                """
+                                '''
                             } else {
                                 sh '''
                                     set -eux
@@ -178,15 +178,15 @@ pipeline {
                     steps {
                         script {
                             if (env.BUILD_RUNTIME == 'docker') {
-                                sh """
+                                sh '''
                                     docker run --rm \\
-                                      -v "${WORKSPACE}:${WORKSPACE}" \\
-                                      -w "${WORKSPACE}" \\
-                                      -e BUILD_ROOT="${BUILD_ROOT}" \\
-                                      -e ERL_LIBS="${ERL_LIBS}" \\
-                                      -e ERLANG_INSTALL_LIB_DIR="${ERLANG_INSTALL_LIB_DIR}" \\
-                                      -e DIALYZER_PLT="${DIALYZER_PLT}" \\
-                                      erlang:${OTP_VERSION} /bin/bash -lc '
+                                      -v "$WORKSPACE:$WORKSPACE" \\
+                                      -w "$WORKSPACE" \\
+                                      -e BUILD_ROOT="$BUILD_ROOT" \\
+                                      -e ERL_LIBS="$ERL_LIBS" \\
+                                      -e ERLANG_INSTALL_LIB_DIR="$ERLANG_INSTALL_LIB_DIR" \\
+                                      -e DIALYZER_PLT="$DIALYZER_PLT" \\
+                                      erlang:$OTP_VERSION /bin/bash -lc '
                                         set -eux
                                         apt-get update
                                         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \\
@@ -199,7 +199,7 @@ pipeline {
                                         cd "${BUILD_ROOT}/ocs"
                                         make check
                                       '
-                                """
+                                '''
                             } else {
                                 sh '''
                                     set -eux
