@@ -44,9 +44,19 @@ pipeline {
                                     if ! command -v rebar3 >/dev/null 2>&1; then
                                       if command -v apt-get >/dev/null 2>&1; then
                                         apt-get update
-                                        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends rebar3
+                                        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends rebar3 nodejs yarnpkg
                                       else
                                         echo "rebar3 nao encontrado e apt-get indisponivel" >&2
+                                        exit 1
+                                      fi
+                                    fi
+                                    if ! command -v yarn >/dev/null 2>&1; then
+                                      if command -v apt-get >/dev/null 2>&1; then
+                                        apt-get update
+                                        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs yarnpkg
+                                        ln -sf /usr/bin/yarnpkg /usr/local/bin/yarn 2>/dev/null || true
+                                      else
+                                        echo "yarn nao encontrado e apt-get indisponivel" >&2
                                         exit 1
                                       fi
                                     fi
@@ -57,6 +67,7 @@ pipeline {
                                     make --version
                                     git --version
                                     rebar3 version
+                                    yarn --version
                                 '''
                             } else if (sh(returnStatus: true, script: 'command -v docker >/dev/null 2>&1') == 0) {
                                 env.BUILD_RUNTIME = 'docker'
@@ -71,7 +82,8 @@ pipeline {
                                     apt-get update
                                     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                                       erlang erlang-dev erlang-src erlang-dialyzer \
-                                      autoconf automake libtool make gcc g++ pkg-config git curl ca-certificates libssl-dev rebar3
+                                      autoconf automake libtool make gcc g++ pkg-config git curl ca-certificates libssl-dev rebar3 nodejs yarnpkg
+                                    ln -sf /usr/bin/yarnpkg /usr/local/bin/yarn 2>/dev/null || true
                                     erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell
                                     autoconf --version
                                     automake --version
@@ -79,6 +91,7 @@ pipeline {
                                     make --version
                                     git --version
                                     rebar3 version
+                                    yarn --version
                                 '''
                             } else {
                                 error('O agente Jenkins nao possui Erlang no PATH, Docker CLI ou apt-get disponivel para bootstrap.')
@@ -102,7 +115,8 @@ pipeline {
                                         set -eux
                                         apt-get update
                                         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \\
-                                          autoconf automake libtool make gcc g++ pkg-config git curl ca-certificates libssl-dev rebar3
+                                          autoconf automake libtool make gcc g++ pkg-config git curl ca-certificates libssl-dev rebar3 nodejs yarnpkg
+                                        ln -sf /usr/bin/yarnpkg /usr/local/bin/yarn 2>/dev/null || true
 
                                         aclocal
                                         autoheader
@@ -230,7 +244,8 @@ pipeline {
                                         set -eux
                                         apt-get update
                                         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \\
-                                          autoconf automake libtool make gcc g++ pkg-config git curl ca-certificates libssl-dev rebar3
+                                          autoconf automake libtool make gcc g++ pkg-config git curl ca-certificates libssl-dev rebar3 nodejs yarnpkg
+                                        ln -sf /usr/bin/yarnpkg /usr/local/bin/yarn 2>/dev/null || true
 
                                         if ! dialyzer --plt_info; then
                                           dialyzer --no_native --build_plt \\
