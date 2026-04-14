@@ -54,11 +54,16 @@ pipeline {
                                       if command -v apt-get >/dev/null 2>&1; then
                                         apt-get update
                                         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends nodejs yarnpkg
-                                        ln -sf /usr/bin/yarnpkg /usr/local/bin/yarn 2>/dev/null || true
                                       else
                                         echo "yarn nao encontrado e apt-get indisponivel" >&2
                                         exit 1
                                       fi
+                                    fi
+                                    if command -v corepack >/dev/null 2>&1; then
+                                      corepack enable
+                                      corepack prepare yarn@1.22.22 --activate
+                                    else
+                                      ln -sf /usr/bin/yarnpkg /usr/local/bin/yarn 2>/dev/null || true
                                     fi
                                     erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell
                                     autoconf --version
@@ -83,7 +88,12 @@ pipeline {
                                     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                                       erlang erlang-dev erlang-src erlang-dialyzer \
                                       autoconf automake libtool make gcc g++ pkg-config git curl ca-certificates libssl-dev rebar3 nodejs yarnpkg
-                                    ln -sf /usr/bin/yarnpkg /usr/local/bin/yarn 2>/dev/null || true
+                                    if command -v corepack >/dev/null 2>&1; then
+                                      corepack enable
+                                      corepack prepare yarn@1.22.22 --activate
+                                    else
+                                      ln -sf /usr/bin/yarnpkg /usr/local/bin/yarn 2>/dev/null || true
+                                    fi
                                     erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell
                                     autoconf --version
                                     automake --version
@@ -116,7 +126,12 @@ pipeline {
                                         apt-get update
                                         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \\
                                           autoconf automake libtool make gcc g++ pkg-config git curl ca-certificates libssl-dev rebar3 nodejs yarnpkg
-                                        ln -sf /usr/bin/yarnpkg /usr/local/bin/yarn 2>/dev/null || true
+                                        if command -v corepack >/dev/null 2>&1; then
+                                          corepack enable
+                                          corepack prepare yarn@1.22.22 --activate
+                                        else
+                                          ln -sf /usr/bin/yarnpkg /usr/local/bin/yarn 2>/dev/null || true
+                                        fi
 
                                         aclocal
                                         autoheader
@@ -245,7 +260,12 @@ pipeline {
                                         apt-get update
                                         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \\
                                           autoconf automake libtool make gcc g++ pkg-config git curl ca-certificates libssl-dev rebar3 nodejs yarnpkg
-                                        ln -sf /usr/bin/yarnpkg /usr/local/bin/yarn 2>/dev/null || true
+                                        if command -v corepack >/dev/null 2>&1; then
+                                          corepack enable
+                                          corepack prepare yarn@1.22.22 --activate
+                                        else
+                                          ln -sf /usr/bin/yarnpkg /usr/local/bin/yarn 2>/dev/null || true
+                                        fi
 
                                         if ! dialyzer --plt_info; then
                                           dialyzer --no_native --build_plt \\
