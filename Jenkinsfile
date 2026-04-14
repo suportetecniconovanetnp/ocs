@@ -117,9 +117,16 @@ pipeline {
                                         git clone https://github.com/mochi/mochiweb.git
                                         cd mochiweb
                                         make all
-                                        MOCHIWEB_VERSION="$(grep vsn ebin/mochiweb.app | cut -d'"'"'"'"'"'"'"'"' -f 2)"
+                                        MOCHIWEB_APP="$(find . -path '*/mochiweb.app' | head -n 1)"
+                                        MOCHIWEB_VERSION="$(grep vsn "$MOCHIWEB_APP" | cut -d'"'"'"'"'"'"'"'"' -f 2)"
                                         cd ..
-                                        mv mochiweb "lib/mochiweb-${MOCHIWEB_VERSION}"
+                                        mkdir -p "lib/mochiweb-${MOCHIWEB_VERSION}"
+                                        cp -R mochiweb/ebin "lib/mochiweb-${MOCHIWEB_VERSION}/" 2>/dev/null || true
+                                        cp -R mochiweb/include "lib/mochiweb-${MOCHIWEB_VERSION}/" 2>/dev/null || true
+                                        cp -R mochiweb/priv "lib/mochiweb-${MOCHIWEB_VERSION}/" 2>/dev/null || true
+                                        cp -R mochiweb/_build/default/lib/mochiweb/ebin "lib/mochiweb-${MOCHIWEB_VERSION}/" 2>/dev/null || true
+                                        cp -R mochiweb/_build/default/lib/mochiweb/include "lib/mochiweb-${MOCHIWEB_VERSION}/" 2>/dev/null || true
+                                        cp -R mochiweb/_build/default/lib/mochiweb/priv "lib/mochiweb-${MOCHIWEB_VERSION}/" 2>/dev/null || true
 
                                         git clone https://gitlab.com/sigscale/radierl.git
                                         cd radierl
@@ -165,9 +172,16 @@ pipeline {
                                     git clone https://github.com/mochi/mochiweb.git
                                     cd mochiweb
                                     make all
-                                    MOCHIWEB_VERSION="$(grep vsn ebin/mochiweb.app | cut -d'"' -f 2)"
+                                    MOCHIWEB_APP="$(find . -path '*/mochiweb.app' | head -n 1)"
+                                    MOCHIWEB_VERSION="$(grep vsn "$MOCHIWEB_APP" | cut -d'"' -f 2)"
                                     cd ..
-                                    mv mochiweb "lib/mochiweb-${MOCHIWEB_VERSION}"
+                                    mkdir -p "lib/mochiweb-${MOCHIWEB_VERSION}"
+                                    cp -R mochiweb/ebin "lib/mochiweb-${MOCHIWEB_VERSION}/" 2>/dev/null || true
+                                    cp -R mochiweb/include "lib/mochiweb-${MOCHIWEB_VERSION}/" 2>/dev/null || true
+                                    cp -R mochiweb/priv "lib/mochiweb-${MOCHIWEB_VERSION}/" 2>/dev/null || true
+                                    cp -R mochiweb/_build/default/lib/mochiweb/ebin "lib/mochiweb-${MOCHIWEB_VERSION}/" 2>/dev/null || true
+                                    cp -R mochiweb/_build/default/lib/mochiweb/include "lib/mochiweb-${MOCHIWEB_VERSION}/" 2>/dev/null || true
+                                    cp -R mochiweb/_build/default/lib/mochiweb/priv "lib/mochiweb-${MOCHIWEB_VERSION}/" 2>/dev/null || true
 
                                     git clone https://gitlab.com/sigscale/radierl.git
                                     cd radierl
