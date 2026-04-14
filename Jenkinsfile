@@ -61,13 +61,14 @@ pipeline {
                                     apt-get update
                                     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
                                       erlang erlang-dev erlang-src erlang-dialyzer \
-                                      autoconf automake libtool make gcc g++ pkg-config git curl ca-certificates libssl-dev
+                                      autoconf automake libtool make gcc g++ pkg-config git curl ca-certificates libssl-dev rebar3
                                     erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell
                                     autoconf --version
                                     automake --version
                                     libtoolize --version
                                     make --version
                                     git --version
+                                    rebar3 version
                                 '''
                             } else {
                                 error('O agente Jenkins nao possui Erlang no PATH, Docker CLI ou apt-get disponivel para bootstrap.')
@@ -91,7 +92,7 @@ pipeline {
                                         set -eux
                                         apt-get update
                                         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \\
-                                          autoconf automake libtool make gcc g++ pkg-config git curl ca-certificates libssl-dev
+                                          autoconf automake libtool make gcc g++ pkg-config git curl ca-certificates libssl-dev rebar3
 
                                         aclocal
                                         autoheader
@@ -205,7 +206,7 @@ pipeline {
                                         set -eux
                                         apt-get update
                                         DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \\
-                                          autoconf automake libtool make gcc g++ pkg-config git curl ca-certificates libssl-dev
+                                          autoconf automake libtool make gcc g++ pkg-config git curl ca-certificates libssl-dev rebar3
 
                                         if ! dialyzer --plt_info; then
                                           dialyzer --no_native --build_plt \\
