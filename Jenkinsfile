@@ -41,12 +41,22 @@ pipeline {
                                 env.BUILD_RUNTIME = 'host'
                                 sh '''
                                     set -eu
+                                    if ! command -v rebar3 >/dev/null 2>&1; then
+                                      if command -v apt-get >/dev/null 2>&1; then
+                                        apt-get update
+                                        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends rebar3
+                                      else
+                                        echo "rebar3 nao encontrado e apt-get indisponivel" >&2
+                                        exit 1
+                                      fi
+                                    fi
                                     erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell
                                     autoconf --version
                                     automake --version
                                     libtoolize --version
                                     make --version
                                     git --version
+                                    rebar3 version
                                 '''
                             } else if (sh(returnStatus: true, script: 'command -v docker >/dev/null 2>&1') == 0) {
                                 env.BUILD_RUNTIME = 'docker'
