@@ -30,6 +30,7 @@ pipeline {
                 ERL_LIBS = "${WORKSPACE}/.build/otp-21/lib"
                 ERLANG_INSTALL_LIB_DIR = "${WORKSPACE}/.build/otp-21/lib"
                 DIALYZER_PLT = "${WORKSPACE}/.build/otp-21/.dialyzer_plt"
+                NODE_OPTIONS = '--max_old_space_size=4096'
                 BUILD_RUNTIME = ''
             }
 
@@ -121,6 +122,7 @@ pipeline {
                                       -e BUILD_ROOT="$BUILD_ROOT" \\
                                       -e ERL_LIBS="$ERL_LIBS" \\
                                       -e ERLANG_INSTALL_LIB_DIR="$ERLANG_INSTALL_LIB_DIR" \\
+                                      -e NODE_OPTIONS="$NODE_OPTIONS" \\
                                       erlang:$OTP_VERSION /bin/bash -lc '
                                         set -eux
                                         apt-get update
@@ -255,6 +257,7 @@ pipeline {
                                       -e ERL_LIBS="$ERL_LIBS" \\
                                       -e ERLANG_INSTALL_LIB_DIR="$ERLANG_INSTALL_LIB_DIR" \\
                                       -e DIALYZER_PLT="$DIALYZER_PLT" \\
+                                      -e NODE_OPTIONS="$NODE_OPTIONS" \\
                                       erlang:$OTP_VERSION /bin/bash -lc '
                                         set -eux
                                         apt-get update
