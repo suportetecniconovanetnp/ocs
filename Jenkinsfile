@@ -54,8 +54,23 @@ pipeline {
                                     set -eu
                                     docker --version
                                 '''
+                            } else if (sh(returnStatus: true, script: 'command -v apt-get >/dev/null 2>&1') == 0) {
+                                env.BUILD_RUNTIME = 'bootstrap'
+                                sh '''
+                                    set -eux
+                                    apt-get update
+                                    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                                      erlang erlang-dev erlang-src erlang-dialyzer \
+                                      autoconf automake libtool make gcc g++ pkg-config git curl ca-certificates libssl-dev
+                                    erl -eval 'erlang:display(erlang:system_info(otp_release)), halt().' -noshell
+                                    autoconf --version
+                                    automake --version
+                                    libtoolize --version
+                                    make --version
+                                    git --version
+                                '''
                             } else {
-                                error('O agente Jenkins nao possui Erlang no PATH nem Docker CLI disponivel.')
+                                error('O agente Jenkins nao possui Erlang no PATH, Docker CLI ou apt-get disponivel para bootstrap.')
                             }
                         }
                     }
