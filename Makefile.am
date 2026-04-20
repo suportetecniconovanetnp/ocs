@@ -15,6 +15,7 @@ script_SCRIPTS = scripts/install_tables.escript \
 		scripts/install_certs.sh \
 		scripts/install_release.sh \
 		scripts/snapshot.escript \
+		scripts/export_cdr.escript \
 		scripts/export_ipdr.escript \
 		scripts/send_sms.escript \
 		scripts/voice_call.escript \
@@ -76,6 +77,7 @@ install-data-hook: $(RELEASE_NAME).tar.gz
 	$(MKDIR_P) $(DESTDIR)/$(otpdir)/log/export
 	$(MKDIR_P) $(DESTDIR)/$(otpdir)/log/http
 	$(MKDIR_P) $(DESTDIR)/$(otpdir)/log/ipdr
+	$(MKDIR_P) $(DESTDIR)/$(otpdir)/log/cdr/chf
 	$(MKDIR_P) $(DESTDIR)/$(otpdir)/log/sasl
 	$(MKDIR_P) $(DESTDIR)/$(otpdir)/snmp/conf
 	$(MKDIR_P) $(DESTDIR)/$(otpdir)/snmp/db
