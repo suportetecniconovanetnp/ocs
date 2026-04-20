@@ -4970,7 +4970,7 @@ nf_name4(_) ->
 %% @private
 chf_ps(TimeStamp, Unique, Protocol, ReqType, Req, Res, Rated) ->
 	CFR = #{recordType => chargingFunctionRecord,
-			recordingNetworkFunctionID => atom_to_binary(node()),
+			recordingNetworkFunctionID => atom_to_binary(node(), utf8),
 			recordOpeningTime => TimeStamp},
 	CFR1 = chf_ps1(Protocol, ReqType, Req, Res, CFR),
 	{TimeStamp, Unique, Protocol, CFR1, Rated}.
@@ -5122,7 +5122,7 @@ chf_ps6(_Protocol, _ReqType, _Req, _Res, CFR) ->
 %% @private
 chf_ims(TimeStamp, Unique, Protocol, ReqType, Req, Res, Rated) ->
 	CFR = #{recordType => chargingFunctionRecord,
-			recordingNetworkFunctionID => atom_to_binary(node()),
+			recordingNetworkFunctionID => atom_to_binary(node(), utf8),
 			recordOpeningTime => TimeStamp},
 	CFR1 = chf_ims1(Protocol, ReqType, Req, Res, CFR),
 	{TimeStamp, Unique, Protocol, CFR1, Rated}.
@@ -5233,7 +5233,7 @@ chf_ims6(_Protocol, _ReqType, _Req, _Res, CFR) ->
 %% @private
 chf_sms(TimeStamp, Unique, Protocol, ReqType, Req, Res, Rated) ->
 	CFR = #{recordType => chargingFunctionRecord,
-			recordingNetworkFunctionID => atom_to_binary(node()),
+			recordingNetworkFunctionID => atom_to_binary(node(), utf8),
 			recordOpeningTime => TimeStamp},
 	CFR1 = chf_sms1(Protocol, ReqType, Req, Res, CFR),
 	{TimeStamp, Unique, Protocol, CFR1, Rated}.
@@ -5344,7 +5344,7 @@ chf_sms6(_Protocol, _ReqType, _Req, _Res, CFR) ->
 %% @private
 chf_vcs(TimeStamp, Unique, Protocol, ReqType, Req, Res, Rated) ->
 	CFR = #{recordType => chargingFunctionRecord,
-			recordingNetworkFunctionID => atom_to_binary(node()),
+			recordingNetworkFunctionID => atom_to_binary(node(), utf8),
 			recordOpeningTime => TimeStamp},
 	CFR1 = chf_vcs1(Protocol, ReqType, Req, Res, CFR),
 	{TimeStamp, Unique, Protocol, CFR1, Rated}.
@@ -6819,7 +6819,7 @@ chf_cfr_csv8(CFR, Acc) ->
 	chf_cfr_csv9(CFR, [<<>> | Acc]).
 %% @hidden
 chf_cfr_csv9(#{cause := Cause} = CFR, Acc) ->
-	chf_cfr_csv10(CFR, [atom_to_binary(Cause) | Acc]);
+	chf_cfr_csv10(CFR, [atom_to_binary(Cause, utf8) | Acc]);
 chf_cfr_csv9(CFR, Acc) ->
 	chf_cfr_csv10(CFR, [<<>> | Acc]).
 %% @hidden
@@ -6837,7 +6837,7 @@ chf_rated_csv([], Acc) ->
 %% @hidden
 chf_rated_csv1(#rated{bucket_type = Type} = Rated, Acc)
 		when Type /= undefined ->
-	Units = atom_to_binary(Type),
+	Units = atom_to_binary(Type, utf8),
 	chf_rated_csv2(Rated, [Units | Acc]);
 chf_rated_csv1(Rated, Acc) ->
 	chf_rated_csv2(Rated, [<<>> | Acc]).
@@ -7000,7 +7000,7 @@ csv_ncgi(#{plmnId := PLMN, nrCellId := Cell}) ->
 csv_cgi(#{plmnId := PLMN, cellId := Cell}) ->
 	{PLMN, Cell}.
 
--dialyzer([{nowarn_function, [location_info/1]}, no_underspecs]).
+-dialyzer({nowarn_function, [location_info/1]}).
 -spec location_info(LocationInfo) -> LocationInfo
 	when
 		LocationInfo :: structured_location_info() | binary().

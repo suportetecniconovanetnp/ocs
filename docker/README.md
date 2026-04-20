@@ -53,6 +53,10 @@ Monte um arquivo com o conteúdo desejado e aponte `OCS_SYS_CONFIG` para ele.
 O entrypoint copia esse arquivo para a release ativa antes de inicializar o banco
 e antes de subir o OCS.
 
+Ao copiar o arquivo, o entrypoint normaliza caminhos de release como
+`lib/ocs-3.4.54/...` e placeholders `lib/@PACKAGE@-@VERSION@/...` para a
+release instalada na imagem.
+
 Exemplo:
 
 ```yaml

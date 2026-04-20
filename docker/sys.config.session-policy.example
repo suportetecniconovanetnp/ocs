@@ -90,8 +90,8 @@
                {port, 8080},
                {socket_type, ip_comm},
                {server_root, "./"},
-               {alias, {"/doc", "lib/ocs-3.4.54/doc"}},
-               {alias, {"/schema", "lib/ocs-3.4.54/priv/schema"}},
+               {alias, {"/doc", "lib/@PACKAGE@-@VERSION@/doc"}},
+               {alias, {"/schema", "lib/@PACKAGE@-@VERSION@/priv/schema"}},
                {alias, {"/.well-known/api-catalog",
-                    "lib/ocs-3.4.54/priv/schema/api-catalog.linkset.jsonld"}},
-               {document_root, "lib/ocs-3.4.54/priv/www"}]}]}]}].
+                    "lib/@PACKAGE@-@VERSION@/priv/schema/api-catalog.linkset.jsonld"}},
+               {document_root, "lib/@PACKAGE@-@VERSION@/priv/www"}]}]}]}].

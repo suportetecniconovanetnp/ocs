@@ -46,7 +46,7 @@ release_sys_config() {
 }
 
 apply_custom_sys_config() {
-  local target
+  local target rel package version
   if [[ -z "${OCS_SYS_CONFIG}" ]]; then
     return 0
   fi
@@ -56,9 +56,18 @@ apply_custom_sys_config() {
     exit 1
   fi
 
+  rel="$(release_name)"
+  package="${rel%%-*}"
+  version="${rel#${package}-}"
   target="$(release_sys_config).config"
   log "aplicando sys.config customizado de ${OCS_SYS_CONFIG} para ${target}"
   cp "${OCS_SYS_CONFIG}" "${target}"
+  sed -i \
+    -e "s|lib/${package}-[^/]*/|lib/${rel}/|g" \
+    -e "s|lib/@PACKAGE@-@VERSION@/|lib/${rel}/|g" \
+    -e "s|@PACKAGE@|${package}|g" \
+    -e "s|@VERSION@|${version}|g" \
+    "${target}"
 }
 
 bootstrap() {
