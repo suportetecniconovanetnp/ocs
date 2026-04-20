@@ -31,9 +31,20 @@
 -record(state,
 			{interval :: pos_integer(),
 			schedule :: calendar:time(),
+			last :: pos_integer() | undefined,
 			dir :: string() | undefined,
 			type :: chf | voip | wlan}).
 -type state() :: #state{}.
+
+-ifdef(OTP_RELEASE).
+	-if(?OTP_RELEASE >= 28).
+		-define(TIMEOUT(Timeout), {timeout, Timeout, timeout}).
+	-else.
+		-define(TIMEOUT(Timeout), Timeout).
+	-endif.
+-else.
+	-define(TIMEOUT(Timeout), Timeout).
+-endif.
 
 %%----------------------------------------------------------------------
 %%  The ocs_log_rotate_server API
@@ -46,10 +57,15 @@
 -spec init(Args) -> Result
 	when
 		Args :: [term()],
-		Result :: {ok, State} | {ok, State, Action}
-				| {stop, Reason} | ignore | {error, Reason},
+		Result :: {ok, State}
+				| {ok, State, Timeout}
+				| {ok, State, hibernate}
+				| {ok, State, {continue, Continue}}
+				| {stop, Reason}
+				| ignore,
 		State :: state(),
-		Action :: gen_server:action(),
+		Timeout :: timeout(),
+		Continue :: term(),
 		Reason :: term().
 %% @doc Initialize the {@module} server.
 %% @see //stdlib/gen_server:init/1
@@ -59,19 +75,10 @@ init([Type, ScheduledTime, Interval] = _Args) when
 		((Type == chf) or (Type == wlan) or (Type == voip)),
 		tuple_size(ScheduledTime) =:= 3,
 		is_integer(Interval), Interval > 0 ->
-	NewInterval = case round_up(Interval) of
-		Interval ->
-			Interval;
-		Interval1 ->
-			error_logger:warning_report(["Using sane log rotation interval",
-					{rotate, Interval}, {interval, Interval1}]),
-			Interval1
-	end,
 	process_flag(trap_exit, true),
-	State = #state{interval = NewInterval,
+	State = #state{interval = Interval,
 			schedule = ScheduledTime, type = Type},
-	Action = {continue, init},
-	{ok, State, Action};
+	{ok, State, {continue, init}};
 init([Type, ScheduledTime, Interval] = _Args) ->
 	error_logger:warning_report(["Ignored archive log specification",
 			{type, Type}, {time, ScheduledTime}, {interval, Interval}]),
@@ -81,10 +88,14 @@ init([Type, ScheduledTime, Interval] = _Args) ->
 	when
 		Info :: term(),
 		State :: state(),
-		Result :: {noreply, NewState} | {noreply, NewState, Action}
+		Result :: {noreply, NewState}
+				| {noreply, NewState, Timeout}
+				| {noreply, NewState, hibernate}
+				| {noreply, NewState, {continue, Continue}}
 				| {stop, Reason, NewState},
 		NewState :: state(),
-		Action :: gen_server:action(),
+		Timeout :: timeout(),
+		Continue :: term(),
 		Reason :: term().
 %% @doc Handle a callback conntinuation.
 %% @see //stdlib/gen_server:handle_continue/2
@@ -116,13 +127,13 @@ handle_continue(init = _Info, #state{type = Type} = State)
 handle_continue1(Directory, #state{type = Type,
 		interval = Interval, schedule = ScheduledTime} = State) ->
 	Directory1 = Directory ++ "/" ++ atom_to_list(Type),
-	Timeout = wait(ScheduledTime, Interval),
-	Action = {timeout, Timeout, timeout},
+	NewState = State#state{dir = Directory1},
+	Timeout = next(ScheduledTime, Interval),
 	case file:make_dir(Directory1) of
 		ok ->
-			{noreply, State, Action};
+			{noreply, NewState, ?TIMEOUT(Timeout)};
 		{error, eexist} ->
-			{noreply, State, Action};
+			{noreply, NewState, ?TIMEOUT(Timeout)};
 		{error, Reason} ->
 			{stop, Reason}
 	end.
@@ -132,12 +143,19 @@ handle_continue1(Directory, #state{type = Type,
 		Request :: term(),
 		From :: gen_server:from(),
 		State :: state(),
-		Result :: {reply, Reply, NewState} | {reply, Reply, NewState, Action}
-				| {noreply, NewState} | {noreply, NewState, Action}
-				| {stop, Reason, Reply, NewState} | {stop, Reason, NewState},
+		Result :: {reply, Reply, NewState}
+				| {reply, Reply, NewState, Timeout}
+				| {reply, Reply, NewState, hibernate}
+				| {reply, Reply, NewState, {continue, Continue}}
+				| {noreply, NewState}
+				| {noreply, NewState, Timeout}
+				| {noreply, NewState, {continue, Continue}}
+				| {stop, Reason, Reply, NewState}
+				| {stop, Reason, NewState},
 		Reply :: term(),
 		NewState :: state(),
-		Action :: gen_server:action(),
+		Timeout :: timeout(),
+		Continue :: term(),
 		Reason :: term().
 %% @doc Handle a request sent using {@link //stdlib/gen_server:call/2.
 %% 	gen_server:call/2,3} or {@link //stdlib/gen_server:multi_call/2.
@@ -152,10 +170,14 @@ handle_call(_Request, _From, State) ->
 	when
 		Request :: term(),
 		State :: state(),
-		Result :: {noreply, NewState} | {noreply, NewState, Action}
+		Result :: {noreply, NewState}
+				| {noreply, NewState, Timeout}
+				| {noreply, NewState, hibernate}
+				| {noreply, NewState, {continue, Continue}}
 				| {stop, Reason, NewState},
 		NewState :: state(),
-		Action :: gen_server:action(),
+		Timeout :: timeout(),
+		Continue :: term(),
 		Reason :: term().
 %% @doc Handle a request sent using {@link //stdlib/gen_server:cast/2.
 %% 	gen_server:cast/2} or {@link //stdlib/gen_server:abcast/2.
@@ -170,27 +192,56 @@ handle_cast(stop, State) ->
 	when
 		Info :: timeout | term(),
 		State::state(),
-		Result :: {noreply, NewState} | {noreply, NewState, Action}
+		Result :: {noreply, NewState}
+				| {noreply, NewState, Timeout}
+				| {noreply, NewState, hibernate}
+				| {noreply, NewState, {continue, Continue}}
 				| {stop, Reason, NewState},
 		NewState :: state(),
-		Action :: gen_server:action(),
+		Timeout :: timeout(),
+		Continue :: term(),
 		Reason :: term().
 %% @doc Handle a received message.
 %% @see //stdlib/gen_server:handle_info/2
 %% @private
 %%
-handle_info(timeout, #state{interval = Interval,
-		schedule = ScheduledTime, type = Type} = State) ->
-	Time = erlang:system_time(millisecond),
-	FileName = ocs_log:iso8601(Time),
-	{Start, End} = previous(Interval),
-	case ocs_log:ipdr_log(Type, FileName, Start, End) of
+handle_info(timeout, #state{last = undefined,
+		interval = Interval, schedule = ScheduledTime} = State) ->
+	Now = erlang:system_time(millisecond),
+	Last = Now - next(ScheduledTime, Interval),
+	NewState = State#state{last = Last},
+	handle_info(timeout, NewState);
+handle_info(timeout, #state{last = Last, interval = Interval,
+		schedule = ScheduledTime, type = Type} = State)
+		when Type == wlan; Type == voip ->
+	Now = erlang:system_time(millisecond),
+	FileName = ocs_log:iso8601(Now),
+	case ocs_log:ipdr_log(Type, FileName, Last + 1, Now) of
 		ok ->
-			{noreply, State, wait(ScheduledTime, Interval)};
+			NewState = State#state{last = Now},
+			Timeout = next(ScheduledTime, Interval),
+			{noreply, NewState, ?TIMEOUT(Timeout)};
 		{error, Reason} ->
 			error_logger:error_report("Failed to create log",
 					[{module, ?MODULE}, {file, FileName}, {reason, Reason}]),
-			{noreply, State, wait(ScheduledTime, Interval)}
+			Timeout = next(ScheduledTime, Interval),
+			{noreply, State, ?TIMEOUT(Timeout)}
+	end;
+handle_info(timeout, #state{last = Last, interval = Interval,
+		schedule = ScheduledTime, type = Type} = State)
+		when Type == chf ->
+	Now = erlang:system_time(millisecond),
+	FileName = ocs_log:iso8601(Now),
+	case ocs_log:cdr_log(Type, FileName, Last + 1, Now) of
+		ok ->
+			NewState = State#state{last = Now},
+			Timeout = next(ScheduledTime, Interval),
+			{noreply, NewState, ?TIMEOUT(Timeout)};
+		{error, Reason} ->
+			error_logger:error_report("Failed to create log",
+					[{module, ?MODULE}, {file, FileName}, {reason, Reason}]),
+			Timeout = next(ScheduledTime, Interval),
+			{noreply, State, ?TIMEOUT(Timeout)}
 	end.
 
 -spec terminate(Reason, State) -> any()
@@ -223,47 +274,32 @@ code_change(_OldVsn, State, _Extra) ->
 %%  internal functions
 %%----------------------------------------------------------------------
 
--spec wait(ScheduledTime, Interval) -> Timeout
+-spec next(ScheduledTime, Interval) -> Timeout
 	when
 		ScheduledTime :: calendar:time(),
 		Interval :: pos_integer(),
 		Timeout :: timeout().
 %% @doc Calculate time until next scheduled rotation.
 %% @hidden
-wait(ScheduledTime, Interval) ->
+next(ScheduledTime, Interval) ->
 	{Date, Time} = erlang:universaltime(),
 	Today = calendar:date_to_gregorian_days(Date),
-	Period = Interval div 1440,
-	ScheduleDay = calendar:gregorian_days_to_date(Today + Period),
-	Next = {ScheduleDay, ScheduledTime},
-	Now = calendar:datetime_to_gregorian_seconds({Date, Time}),
-	(calendar:datetime_to_gregorian_seconds(Next) - Now) * 1000.
-
--spec round_up(Interval) -> Interval
-	when
-		Interval :: pos_integer().
-%% @doc Interval must be a divisor of one day.
-%% @hidden
-round_up(Interval) when Interval =< 1440 ->
-	1440;
-round_up(Interval) ->
 	Days = Interval div 1440,
-	Days * 1440.
-
--spec previous(Interval) -> {Start, End}
-	when
-		Interval :: pos_integer(),
-		Start :: calendar:datetime(),
-		End :: calendar:datetime().
-%% @doc Find start of previous interval.
-%% @hidden
-previous(Interval) when is_integer(Interval) ->
-	IntervalDays = Interval div 1440,
-	{Date, _Time} = erlang:universaltime(),
-	Today = calendar:date_to_gregorian_days(Date),
-	StartDay = Today - IntervalDays,
-	Start = {calendar:gregorian_days_to_date(StartDay), {0, 0, 0}},
-	Yesterday = Today - 1,
-	End = {calendar:gregorian_days_to_date(Yesterday), {23, 59, 59}},
-	{Start, End}.
+	ScheduledDay = calendar:gregorian_days_to_date(Today + Days),
+	Next = {ScheduledDay, ScheduledTime},
+	Now = calendar:datetime_to_gregorian_seconds({Date, Time}),
+	Seconds = case calendar:datetime_to_gregorian_seconds(Next) of
+		Scheduled when Scheduled =:= Now ->
+			Interval;
+		Scheduled when Scheduled < Now ->
+			Interval - ((Now - Scheduled) rem Interval);
+		Scheduled when Scheduled > Now ->
+			(Scheduled - Now) rem Interval
+	end,
+	case Seconds of
+		0 ->
+			Interval * 1000;
+		N ->
+			N * 1000
+	end.
 
