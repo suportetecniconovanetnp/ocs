@@ -878,7 +878,7 @@ used_octets(#'3gpp_ro_Used-Service-Unit'{
 	octets(CCTotalOctets, CCInputOctets, CCOutputOctets).
 
 %% @hidden
-octets(CCTotalOctets, _CCInputOctets, _CCOutputOctets) ->
+octets(CCTotalOctets, CCInputOctets, CCOutputOctets) ->
 	case amount(CCTotalOctets) of
 		Total when Total > 0 ->
 			Total;
