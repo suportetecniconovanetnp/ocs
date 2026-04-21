@@ -89,7 +89,7 @@
 ;       *[ Event-Trigger ]
 ;        [ Event-Report-Indication ]
          [ Access-Network-Charging-Address ]
-;       *[ Access-Network-Charging-Identifier-Gx ]
+        *[ Access-Network-Charging-Identifier-Gx ]
 ;       *[ CoA-Information ]
 ;       *[ Usage-Monitoring-Information ]
 ;        [ NBIFOM-Support ]
