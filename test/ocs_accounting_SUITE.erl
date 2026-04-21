@@ -158,6 +158,7 @@ init_per_testcase1(TestCase, Config) when
 	[{radius_nas_socket, Socket}, {radius_nas_client, Address} | Config];
 init_per_testcase1(TestCase, Config) when
 		TestCase == diameter_scur;
+		TestCase == diameter_scur_stop_time_usage;
 		TestCase == diameter_scur_cud;
 		TestCase == diameter_scur_no_credit;
 		TestCase == diameter_scur_depletion;
@@ -196,6 +197,7 @@ end_per_testcase(TestCase, Config) when
 	ok = ocs:delete_client(Address);
 end_per_testcase(TestCase, Config) when
 		TestCase == diameter_scur;
+		TestCase == diameter_scur_stop_time_usage;
 		TestCase == diameter_scur_cud;
 		TestCase == diameter_scur_no_credit;
 		TestCase == diameter_scur_depletion;
@@ -238,7 +240,7 @@ sequences() ->
 all() ->
 	[radius_accounting, radius_disconnect_session,
 			radius_multisession_disallowed, radius_multisession,
-			diameter_scur, diameter_scur_cud,
+			diameter_scur, diameter_scur_stop_time_usage, diameter_scur_cud,
 			diameter_scur_no_credit, diameter_scur_depletion,
 			diameter_ecur, diameter_ecur_no_credit,
 			diameter_iec_cud, diameter_iec_dud,
@@ -508,6 +510,36 @@ diameter_scur(_Config) ->
 			'Auth-Application-Id' = ?RO_APPLICATION_ID,
 			'CC-Request-Type' = ?'3GPP_CC-REQUEST-TYPE_TERMINATION_REQUEST',
 			'CC-Request-Number' = NewRequestNum} = Answer1.
+
+diameter_scur_stop_time_usage() ->
+	[{userdata, [{doc, "DIAMETER PS SCUR stop with time-only used units"}]}].
+
+diameter_scur_stop_time_usage(_Config) ->
+	P1 = price(usage, octets, rand:uniform(10000000), rand:uniform(1000000)),
+	OfferId = add_offer([P1], 4),
+	ProdRef = add_product(OfferId),
+	Username = list_to_binary(ocs:generate_identity()),
+	Password = ocs:generate_identity(),
+	{ok, #service{}} = ocs:add_service(Username, Password, ProdRef, []),
+	Balance = rand:uniform(1000000000),
+	B1 = bucket(octets, Balance),
+	_BId = add_bucket(ProdRef, B1),
+	Ref = erlang:ref_to_list(make_ref()),
+	SId = diameter:session_id(Ref),
+	RequestNum = 0,
+	Answer0 = diameter_scur_start(SId, Username, RequestNum, rand:uniform(Balance)),
+	#'3gpp_ro_CCA'{'Result-Code' = ?'DIAMETER_BASE_RESULT-CODE_SUCCESS',
+			'Auth-Application-Id' = ?RO_APPLICATION_ID,
+			'CC-Request-Type' = ?'3GPP_CC-REQUEST-TYPE_INITIAL_REQUEST',
+			'CC-Request-Number' = RequestNum} = Answer0,
+	NewRequestNum = RequestNum + 1,
+	Answer1 = diameter_scur_stop_time(SId, Username, NewRequestNum,
+			rand:uniform(3600)),
+	#'3gpp_ro_CCA'{'Result-Code' = ?'DIAMETER_BASE_RESULT-CODE_SUCCESS',
+			'Auth-Application-Id' = ?RO_APPLICATION_ID,
+			'CC-Request-Type' = ?'3GPP_CC-REQUEST-TYPE_TERMINATION_REQUEST',
+			'CC-Request-Number' = NewRequestNum} = Answer1,
+	[#bucket{remain_amount = Balance}] = ocs:get_buckets(ProdRef).
 
 diameter_scur_cud() ->
 	[{userdata, [{doc, "DIAMETER SCUR voice with Centralized Unit Determination"}]}].
@@ -1736,6 +1768,36 @@ diameter_scur_stop(SId, Username, RequestNum, Used) ->
 			'Subscription-Id-Type' = ?'3GPP_SUBSCRIPTION-ID-TYPE_END_USER_E164',
 			'Subscription-Id-Data' = Username},
 	UsedUnits = #'3gpp_ro_Used-Service-Unit'{'CC-Total-Octets' = [Used]},
+	MultiServices_CC = #'3gpp_ro_Multiple-Services-Credit-Control'{
+			'Used-Service-Unit' = [UsedUnits]},
+	ServiceInformation = #'3gpp_ro_Service-Information'{'PS-Information' =
+			[#'3gpp_ro_PS-Information'{
+					'3GPP-PDP-Type' = [3],
+					'Serving-Node-Type' = [2],
+					'SGSN-Address' = [{10,1,2,3}],
+					'GGSN-Address' = [{10,4,5,6}],
+					'3GPP-IMSI-MCC-MNC' = [<<"001001">>],
+					'3GPP-GGSN-MCC-MNC' = [<<"001001">>],
+					'3GPP-SGSN-MCC-MNC' = [<<"001001">>]}]},
+	CC_CCR = #'3gpp_ro_CCR'{'Session-Id' = SId,
+			'Auth-Application-Id' = ?RO_APPLICATION_ID,
+			'Service-Context-Id' = "32251@3gpp.org" ,
+			'User-Name' = [Username],
+			'CC-Request-Type' = ?'3GPP_CC-REQUEST-TYPE_TERMINATION_REQUEST',
+			'CC-Request-Number' = RequestNum,
+			'Event-Timestamp' = [calendar:universal_time()],
+			'Multiple-Services-Credit-Control' = [MultiServices_CC],
+			'Subscription-Id' = [Subscription_Id],
+			'Service-Information' = [ServiceInformation]},
+	{ok, Answer} = diameter:call(?MODULE, cc_app_test, CC_CCR, []),
+	Answer.
+
+%% @hidden
+diameter_scur_stop_time(SId, Username, RequestNum, Used) ->
+	Subscription_Id = #'3gpp_ro_Subscription-Id'{
+			'Subscription-Id-Type' = ?'3GPP_SUBSCRIPTION-ID-TYPE_END_USER_E164',
+			'Subscription-Id-Data' = Username},
+	UsedUnits = #'3gpp_ro_Used-Service-Unit'{'CC-Time' = [Used]},
 	MultiServices_CC = #'3gpp_ro_Multiple-Services-Credit-Control'{
 			'Used-Service-Unit' = [UsedUnits]},
 	ServiceInformation = #'3gpp_ro_Service-Information'{'PS-Information' =

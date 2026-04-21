@@ -847,58 +847,54 @@ get_mscc([], Acc) ->
 
 %% @hidden
 get_rsu(#'3gpp_ro_Multiple-Services-Credit-Control'{
-		'Requested-Service-Unit' = [#'3gpp_ro_Requested-Service-Unit'{
-		'CC-Total-Octets' = [CCTotalOctets]}]})
-		when is_integer(CCTotalOctets), CCTotalOctets > 0 ->
-	[{octets, CCTotalOctets}];
-get_rsu(#'3gpp_ro_Multiple-Services-Credit-Control'{
-		'Requested-Service-Unit' = [#'3gpp_ro_Requested-Service-Unit'{
-		'CC-Output-Octets' = [CCOutputOctets],
-		'CC-Input-Octets' = [CCInputOctets]}]})
-		when is_integer(CCInputOctets), is_integer(CCOutputOctets),
-		((CCInputOctets > 0) or (CCOutputOctets > 0)) ->
-	[{octets, CCInputOctets + CCOutputOctets}];
-get_rsu(#'3gpp_ro_Multiple-Services-Credit-Control'{
-		'Requested-Service-Unit' = [#'3gpp_ro_Requested-Service-Unit'{
-		'CC-Time' = [CCTime]}]})
-		when is_integer(CCTime), CCTime > 0 ->
-	[{seconds, CCTime}];
-get_rsu(#'3gpp_ro_Multiple-Services-Credit-Control'{
-		'Requested-Service-Unit' = [#'3gpp_ro_Requested-Service-Unit'{
-		'CC-Service-Specific-Units' = [CCSpecUnits]}]})
-		when is_integer(CCSpecUnits), CCSpecUnits > 0 ->
-	[{messages, CCSpecUnits}];
-get_rsu(#'3gpp_ro_Multiple-Services-Credit-Control'{
-		'Requested-Service-Unit' = [#'3gpp_ro_Requested-Service-Unit'{}]}) ->
-	[];
+		'Requested-Service-Unit' = [RSU]}) ->
+	positive_amounts([{octets, requested_octets(RSU)},
+			{seconds, amount(RSU#'3gpp_ro_Requested-Service-Unit'.'CC-Time')},
+			{messages, amount(RSU#'3gpp_ro_Requested-Service-Unit'.'CC-Service-Specific-Units')}]);
 get_rsu(#'3gpp_ro_Multiple-Services-Credit-Control'{}) ->
 	undefined.
 
 %% @hidden
 get_usu(#'3gpp_ro_Multiple-Services-Credit-Control'{
-		'Used-Service-Unit' = [#'3gpp_ro_Used-Service-Unit'{
-		'CC-Total-Octets' = [CCTotalOctets]} | _]})
-		when is_integer(CCTotalOctets), CCTotalOctets > 0 ->
-	[{octets, CCTotalOctets}];
-get_usu(#'3gpp_ro_Multiple-Services-Credit-Control'{
-		'Used-Service-Unit' = [#'3gpp_ro_Used-Service-Unit'{
-		'CC-Output-Octets' = [CCOutputOctets],
-		'CC-Input-Octets' = [CCInputOctets]} | _]})
-		when is_integer(CCInputOctets), is_integer(CCOutputOctets),
-		((CCInputOctets > 0) or (CCOutputOctets > 0)) ->
-	[{octets, CCInputOctets + CCOutputOctets}];
-get_usu(#'3gpp_ro_Multiple-Services-Credit-Control'{
-		'Used-Service-Unit' = [#'3gpp_ro_Used-Service-Unit'{
-		'CC-Time' = [CCTime]} | _]})
-		when is_integer(CCTime), CCTime > 0 ->
-	[{seconds, CCTime}];
-get_usu(#'3gpp_ro_Multiple-Services-Credit-Control'{
-		'Used-Service-Unit' = [#'3gpp_ro_Used-Service-Unit'{
-		'CC-Service-Specific-Units' = [CCSpecUnits]} | _]})
-		when is_integer(CCSpecUnits), CCSpecUnits > 0 ->
-	[{messages, CCSpecUnits}];
+		'Used-Service-Unit' = [USU | _]}) ->
+	positive_amounts([{octets, used_octets(USU)},
+			{seconds, amount(USU#'3gpp_ro_Used-Service-Unit'.'CC-Time')},
+			{messages, amount(USU#'3gpp_ro_Used-Service-Unit'.'CC-Service-Specific-Units')}]);
 get_usu(#'3gpp_ro_Multiple-Services-Credit-Control'{'Used-Service-Unit' = _}) ->
 	[].
+
+%% @hidden
+requested_octets(#'3gpp_ro_Requested-Service-Unit'{
+		'CC-Total-Octets' = CCTotalOctets,
+		'CC-Input-Octets' = CCInputOctets,
+		'CC-Output-Octets' = CCOutputOctets}) ->
+	octets(CCTotalOctets, CCInputOctets, CCOutputOctets).
+
+%% @hidden
+used_octets(#'3gpp_ro_Used-Service-Unit'{
+		'CC-Total-Octets' = CCTotalOctets,
+		'CC-Input-Octets' = CCInputOctets,
+		'CC-Output-Octets' = CCOutputOctets}) ->
+	octets(CCTotalOctets, CCInputOctets, CCOutputOctets).
+
+%% @hidden
+octets(CCTotalOctets, _CCInputOctets, _CCOutputOctets) ->
+	case amount(CCTotalOctets) of
+		Total when Total > 0 ->
+			Total;
+		0 ->
+			amount(CCInputOctets) + amount(CCOutputOctets)
+	end.
+
+%% @hidden
+amount([Amount]) when is_integer(Amount), Amount > 0 ->
+	Amount;
+amount(_) ->
+	0.
+
+%% @hidden
+positive_amounts(Amounts) ->
+	[{Units, Amount} || {Units, Amount} <- Amounts, Amount > 0].
 
 %% @hidden
 get_si(#'3gpp_ro_Multiple-Services-Credit-Control'{'Service-Identifier' = [SI]})
@@ -916,43 +912,46 @@ get_rg(_) ->
 
 %% @hidden
 validate_mscc_units(ServiceType, Amounts) ->
-	case expected_service_units(ServiceType) of
+	case allowed_mscc_units(ServiceType) of
 		undefined ->
 			ok;
-		ExpectedUnits ->
-			case invalid_mscc_units(ExpectedUnits, Amounts) of
+		AllowedUnits ->
+			case invalid_mscc_units(AllowedUnits, Amounts) of
 				[] ->
 					ok;
 				InvalidUnits ->
-					{error, {invalid_units, ServiceType, ExpectedUnits, InvalidUnits}}
+					{error, {invalid_units, ServiceType, AllowedUnits, InvalidUnits}}
 			end
 	end.
 
 %% @hidden
-expected_service_units(32251) ->
-	[octets];
-expected_service_units(32255) ->
-	[octets];
-expected_service_units(32260) ->
-	[seconds];
-expected_service_units(32275) ->
-	[seconds];
-expected_service_units(32276) ->
-	[seconds];
-expected_service_units(32274) ->
-	[messages];
-expected_service_units(_) ->
+allowed_mscc_units(32251) ->
+	{[octets, seconds, messages], [octets]};
+allowed_mscc_units(32255) ->
+	{[octets, seconds, messages], [octets]};
+allowed_mscc_units(32260) ->
+	{[seconds], [seconds]};
+allowed_mscc_units(32275) ->
+	{[seconds], [seconds]};
+allowed_mscc_units(32276) ->
+	{[seconds], [seconds]};
+allowed_mscc_units(32274) ->
+	{[messages], [messages]};
+allowed_mscc_units(_) ->
 	undefined.
 
 %% @hidden
-invalid_mscc_units(ExpectedUnits, Amounts) ->
-	lists:usort(lists:flatten([invalid_mscc_units1(ExpectedUnits, Amount)
+invalid_mscc_units(AllowedUnits, Amounts) ->
+	lists:usort(lists:flatten([invalid_mscc_units1(AllowedUnits, Amount)
 			|| Amount <- Amounts])).
 
 %% @hidden
-invalid_mscc_units1(ExpectedUnits, {_ServiceId, _RatingGroup, Used, Reserve}) ->
-	[Units || {Units, _} <- normalize_units(Used) ++ normalize_units(Reserve),
-			not lists:member(Units, ExpectedUnits)].
+invalid_mscc_units1({AllowedUsed, AllowedReserve},
+		{_ServiceId, _RatingGroup, Used, Reserve}) ->
+	[{used, Units} || {Units, _} <- normalize_units(Used),
+			not lists:member(Units, AllowedUsed)]
+			++ [{requested, Units} || {Units, _} <- normalize_units(Reserve),
+			not lists:member(Units, AllowedReserve)].
 
 %% @hidden
 normalize_units(undefined) ->
@@ -991,7 +990,8 @@ rate(ServiceType, ServiceNetwork, SubscriberIDs, Timestamp,
 		ok ->
 			rate(ServiceType, ServiceNetwork, SubscriberIDs, Timestamp,
 					Address, Direction, Flag, SessionAttributes,
-					Amounts, [], undefined, undefined);
+					filter_billable_amounts(ServiceType, Amounts), [],
+					undefined, undefined);
 		{error, _} = Error ->
 			Error
 	end.
@@ -1275,6 +1275,25 @@ normalize_debits(Flag, SubscriberIDs, ServiceId,
 					{normalized_debits, Debits}]),
 			Debits
 	end.
+
+%% @hidden
+filter_billable_amounts(32251, Amounts) ->
+	filter_billable_amounts1([octets], Amounts);
+filter_billable_amounts(32255, Amounts) ->
+	filter_billable_amounts1([octets], Amounts);
+filter_billable_amounts(_ServiceType, Amounts) ->
+	Amounts.
+
+%% @hidden
+filter_billable_amounts1(Units, Amounts) ->
+	[{SI, RG, filter_units(Units, Used), Reserve}
+			|| {SI, RG, Used, Reserve} <- Amounts].
+
+%% @hidden
+filter_units(_Units, undefined) ->
+	undefined;
+filter_units(Units, Amounts) ->
+	[Amount || {Unit, _} = Amount <- Amounts, lists:member(Unit, Units)].
 
 %% @hidden
 log_session_request(EventType, SessionId, SubscriberIDs, Amounts,
