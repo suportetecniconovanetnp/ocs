@@ -20,6 +20,11 @@ AC_ARG_ENABLE([debug],
 		[AS_HELP_STRING([--enable-debug], [enable debugging (default is no)])])
 AC_ARG_WITH([ssl],
 		[AS_HELP_STRING([--with-ssl=PATH], [specify location of OpenSSL include and lib])])
+AC_ARG_ENABLE([www-next],
+		[AS_HELP_STRING([--enable-www-next],
+				[build the modernised Vue 3 web UI in priv/www-next (default is no)])],
+		[enable_www_next=$enableval], [enable_www_next=no])
+AM_CONDITIONAL([BUILD_WWW_NEXT], [test "x$enable_www_next" = "xyes"])
 CFLAGS="${CFLAGS} -Wall"
 PKG_PROG_PKG_CONFIG
 AC_ARG_WITH([systemdsystemunitdir],
@@ -74,6 +79,7 @@ eincludedir=$ERLANG_INSTALL_LIB_DIR/$PACKAGE_NAME-$PACKAGE_VERSION/include
 docdir=$ERLANG_INSTALL_LIB_DIR/$PACKAGE_NAME-$PACKAGE_VERSION/doc
 libdir=$ERLANG_INSTALL_LIB_DIR/$PACKAGE_NAME-$PACKAGE_VERSION/priv/lib
 wwwdir=$ERLANG_INSTALL_LIB_DIR/$PACKAGE_NAME-$PACKAGE_VERSION/priv/www
+wwwnextdir=$ERLANG_INSTALL_LIB_DIR/$PACKAGE_NAME-$PACKAGE_VERSION/priv/www-next
 examplesdir=$ERLANG_INSTALL_LIB_DIR/$PACKAGE_NAME-$PACKAGE_VERSION/priv/examples
 schemadir=$ERLANG_INSTALL_LIB_DIR/$PACKAGE_NAME-$PACKAGE_VERSION/priv/schema
 scriptdir=$ERLANG_INSTALL_LIB_DIR/$PACKAGE_NAME-$PACKAGE_VERSION/priv/bin
@@ -88,6 +94,7 @@ AC_SUBST(mibsdir)
 AC_SUBST(eincludedir)
 AC_SUBST(privdir)
 AC_SUBST(wwwdir)
+AC_SUBST(wwwnextdir)
 AC_SUBST(examplesdir)
 AC_SUBST(schemadir)
 AC_SUBST(scriptdir)
@@ -161,7 +168,7 @@ AC_SUBST([RELDIR])
 AC_OUTPUT([Makefile include/Makefile src/Makefile ebin/Makefile doc/Makefile
 		c_src/Makefile priv/Makefile priv/lib/Makefile
 		priv/mibs/Makefile mibs/Makefile priv/www/Makefile priv/examples/Makefile
-		priv/www/package.json
+		priv/www/package.json priv/www-next/Makefile
 		priv/schema/Makefile test/Makefile
 		sys.config $PACKAGE_NAME.rel ebin/$PACKAGE_NAME.appup
 		scripts/$PACKAGE_NAME scripts/$PACKAGE_NAME.service])

@@ -1,0 +1,93 @@
+import { defineConfig, loadEnv, type PluginOption } from 'vite';
+import vue from '@vitejs/plugin-vue';
+import vuetify from 'vite-plugin-vuetify';
+import { VitePWA } from 'vite-plugin-pwa';
+import { createProxyMiddleware } from 'http-proxy-middleware';
+import { fileURLToPath, URL } from 'node:url';
+
+/**
+ * Per-request proxy: the browser sends `X-OCS-Target: http://host:port`
+ * with each request hitting `/__ocs/*`, and Vite forwards it. Lets the
+ * login screen point to any backend without forcing CORS server-side.
+ */
+function dynamicOcsProxy(defaultTarget: string): PluginOption {
+  return {
+    name: 'ocs-dynamic-proxy',
+    configureServer(server) {
+      const proxy = createProxyMiddleware({
+        target: defaultTarget,
+        changeOrigin: true,
+        router: (req) => {
+          const header = req.headers['x-ocs-target'];
+          const target = Array.isArray(header) ? header[0] : header;
+          return typeof target === 'string' && target.length > 0 ? target : defaultTarget;
+        },
+        pathRewrite: { '^/__ocs': '' },
+        logger: console,
+      });
+      server.middlewares.use('/__ocs', proxy);
+    },
+  };
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const apiTarget = env.VITE_OCS_API_URL ?? 'http://localhost:8080';
+
+  return {
+    plugins: [
+      vue(),
+      vuetify({ autoImport: true }),
+      dynamicOcsProxy(apiTarget),
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['favicon.ico', 'images/**/*'],
+        manifest: {
+          name: 'Online Charging System',
+          short_name: 'ocs',
+          description: 'Online Charging System (OCS)',
+          theme_color: '#f57f17',
+          background_color: '#ffffff',
+          display: 'standalone',
+          start_url: '/',
+          icons: [
+            { src: 'images/manifest/sigscale-icon-16x16.png', sizes: '16x16', type: 'image/png' },
+            { src: 'images/manifest/sigscale-icon-32x32.png', sizes: '32x32', type: 'image/png' },
+            { src: 'images/manifest/sigscale-icon-64x64.png', sizes: '64x64', type: 'image/png' },
+            { src: 'images/manifest/sigscale-logo-232x132.png', sizes: '232x132', type: 'image/png' },
+          ],
+        },
+        workbox: {
+          navigateFallbackDenylist: [/^\/__ocs\//, /^\/api\//],
+        },
+      }),
+    ],
+    resolve: {
+      alias: {
+        '@': fileURLToPath(new URL('./src', import.meta.url)),
+      },
+    },
+    server: {
+      port: 5173,
+    },
+    build: {
+      outDir: 'dist',
+      sourcemap: mode !== 'production',
+      target: 'es2022',
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['vue', 'vue-router', 'pinia'],
+            vuetify: ['vuetify'],
+            charts: ['echarts', 'vue-echarts'],
+          },
+        },
+      },
+    },
+    test: {
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: ['tests/unit/setup.ts'],
+    },
+  };
+});

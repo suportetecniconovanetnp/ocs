@@ -1,0 +1,974 @@
+{
+  "ocs": {
+    "description": "Long form title",
+    "message": "Online Charging System (OCS)"
+  },
+  "subs": {
+    "description": "Subscribers menu title",
+    "message": "Subscribers"
+  },
+  "subscriber": {
+    "description": "Subscriber identity",
+    "message": "Subscriber"
+  },
+  "clients": {
+    "description": "Clients menu title",
+    "message": "Clients"
+  },
+  "logs": {
+    "description": "Logs menu title",
+    "message": "Logs"
+  },
+  "access": {
+    "description": "Access sub menu from Log main title",
+    "message": "Access"
+  },
+  "accounting": {
+    "description": "Accounting sub menu from Log main title",
+    "message": "Accounting"
+  },
+  "ipdr": {
+    "description": "IPDR sub menu from Log main title",
+    "message": "IPDR"
+  },
+  "http": {
+    "description": "HTTP sub menu from Log main title",
+    "message": "HTTP"
+  },
+  "identity": {
+    "description": "Identity/username of subscriber",
+    "message": "Identity"
+  },
+  "password": {
+    "description": "Password of subscribers",
+    "message": "Password"
+  },
+  "balance": {
+    "description": "Balance of subscribers",
+    "message": "Balance"
+	},
+  "asc": {
+    "description": "AscendDataRate of subscribers",
+    "message": "Data Rate"
+  },
+  "xmit": {
+    "description": "XmitDataRate of subscribers",
+    "message": "Xmit Rate"
+  },
+  "session": {
+    "description": "Timeout of subscribers",
+    "message": "Timeout"
+  },
+  "sessionTimeout": {
+    "description": "Timeout of subscribers",
+    "message": "Session Timeout"
+  },
+  "sessionInterval": {
+    "description": "Timeout of subscribers",
+    "message": "Session Interval"
+  },
+  "int": {
+    "description": "Interval of subscribers",
+    "message": "Interval"
+  },
+  "enable": {
+    "description": "Enable subscribers",
+    "message": "Enabled"
+  },
+  "gen": {
+    "description": "Generate Password or identity for adding subscribers",
+    "message": "Generate"
+  },
+  "recieve": {
+    "description": "Receive Data Rate for adding subscribers",
+    "message": "Receive Data Rate"
+  },
+  "trans": {
+    "description": "Transmit Data Rate for adding subscribers",
+    "message": "Transmit Data Rate"
+  },
+	"ses": {
+    "description": "Session Timeout for adding subscribers",
+    "message": "Session Timeout"
+  },
+  "updateInterval": {
+    "description": "Update Interval for adding subscribers",
+    "message": "Update Interval"
+  },
+  "class": {
+    "description": "Class for adding subscribers",
+    "message": "Class"
+  },
+  "submit": {
+    "description": "Submit button for adding subscribers",
+    "message": "Submit"
+  },
+  "cancel": {
+    "description": "Cancel button for adding subscribers",
+    "message": "Cancel"
+  },
+	"AuthTitle": {
+    "description": "Title for adding subscribers",
+    "message": "Authentication"
+  },
+  "AuthorTitle": {
+    "description": "Title for adding subscribers",
+    "message": "Authorization"
+  },
+	"AuthTooltip": {
+    "description": "Tooltip message for authentication",
+    "message": "Credentials used to authenticate subscriber."
+  },
+  "AuthorTooltip": {
+    "description": "Tooltip message for authorization", 
+    "message": "Services authorized for subscriber."
+  },
+	"newpass": {
+    "description": "New password for update",           
+    "message": "New Password"
+  },
+	"newpassError": {
+    "description": "New password error message for update",
+    "message": "New password can't be empty!"
+  },
+	"update": {
+    "description": "Update button for update",             
+    "message": "Update"
+  },
+	"delete": {
+    "description": "Delete button for update",
+    "message": "Delete"
+  },
+	"balTooltip": {
+    "description": "Tooltip message for balance",
+    "message": "Credit value, in bytes, against which accounting will debit usage against."
+  },
+	"dataRateTooltip": {
+    "description": "Tooltip message for DataRate",
+    "message": "Limit on received (download) data per second in bits."
+  },
+	"xmitRateTooltip": {
+    "description": "Tooltip message for xmitRate",
+    "message": "Limit on transmitted (upload) data per second in bits."
+  },
+	"sessionTimeoutTooltip": {
+    "description": "Tooltip message for sessionTimeout",
+    "message": "Time between authorization requests in an active session in seconds "
+  },
+	"intervalTooltip": {
+    "description": "Tooltip message for Accouting interval",
+    "message": "Time between accouting interim updates in seconds."
+  },
+	"EnableTooltip": {
+    "description": "Tooltip message for Enable",            
+    "message": "Enabled for service or temporarily disabled."
+  },
+	"accInt": {
+    "description": "Interval for Accounting",    
+    "message": "Accouting interval"
+  },
+	"address": {
+    "description": "Address of Client",
+    "message": "Address"
+  },
+   "identify": {
+    "description": "identifier of Client",
+    "message": "Identifier"
+  },
+   "listen": {
+    "description": "Listen Port of RADIUS Client",
+    "message": "Port"
+  },
+   "proto": {
+    "description": "Protocol of Client",
+    "message": "Protocol"
+  },
+	"addClient": {
+    "description": "Title for add Client",
+    "message": "Add Client"
+  },
+	"ipAddress": {
+    "description": "Ip Address for add Client",
+    "message": "IP Address"
+  },
+	"ipTooltip": {
+    "description": "Tooltip message of Ip address",
+    "message": "IP address of network access server, router or access point"
+  },
+	"listenTooltip": {
+    "description": "Tooltip message of Listen port",
+    "message": "Port network access server, router or access point listens on"
+  },
+	"secretTooltip": {
+    "description": "Tooltip message of client secret",
+    "message": "Secret shared with the network access server, router or access point."
+  },
+   "clientAdded": {
+    "description": "Success Toast Message",
+    "message": "Client added"
+  },
+   "clientUpdated": {
+    "description": "Success Toast Message",
+    "message": "Client updated"
+  },
+   "clientDeleted": {
+    "description": "Success Toast Message",
+    "message": "Client deleted"
+  },
+	"serverGen": {
+    "description": "Title of server generated identity/password dialog.",
+    "message": "Server Generated"
+  },
+	"secret": {
+    "description": "Client shared secret.",
+    "message": "Secret"
+  },
+   "close": {
+    "description": "Button for close",
+    "message": "Close"
+  },
+	"propTitle": {
+    "description": "Properties title for update client",
+    "message": "Properties"
+  },
+	"authClientTool": {
+    "description": "Tooltip message for authenticate client",
+    "message": "Credentials used to authenticate network access server, router or access point."
+  },
+	"authorClientTool": {
+    "description": "Tooltip message for authorization client",
+    "message": "Properties of network access server, router or access pointor client."
+  },
+	"protoTool": {
+    "description": "Tooltip mesage for update Protocol",
+    "message": "Protocol used by network access server, router or access point."
+  },
+   "timeStamp": {
+    "description": "Timestamp for access log",
+    "message": "Time Stamp"
+  },
+	"userName": {
+    "description": "Username for logs",
+    "message": "User Name"
+  },
+	"clientAddress": {
+    "description": "clientAddress for logs",
+    "message": "Client Address"
+  },
+	"clientPort": {
+    "description": "clientPort for logs",
+    "message": "Client Port"
+  },
+	"type": {
+    "description": "type for logs",
+    "message": "Type"
+  },
+	"creationTime": {
+    "description": "Creation time for logs",
+    "message": "Creation Time"
+  },
+	"seq": {
+    "description": "Sequence for logs",
+    "message": "Seq"
+  },
+	"acctSessionId": {
+    "description": "Account session ID for logs",
+    "message": "Session ID"
+  },
+   "callingStationId": {
+    "description": "Calling Station ID for logs",
+    "message": "Calling Station ID"
+  },
+   "calledStationId": {
+    "description": "Called Station ID for logs",
+    "message": "Called Station ID"
+  },
+   "nasIpAddress": {
+    "description": "Nas IP for logs",
+    "message": "NAS Address"
+  },
+   "nasID": {
+    "description": "Nas ID for logs",
+    "message": "NAS ID"
+  },
+   "sessionDur": {
+    "description": "Session duration for logs",
+    "message": "Duration"
+  },
+   "inputOctets": {
+    "description": "Input Octets for logs",
+    "message": "Input Octets"
+  },
+   "outputOctets": {
+    "description": "output Octets for logs",
+    "message": "Output Octets"
+  },
+   "gmtSessionStartDateTime": {
+    "description": "gmtSessionStartDateTime for logs",
+    "message": "Start Time"
+  },
+   "gmtSessionendtime": {
+    "description": "gmtSessionStartDateTime for logs",
+    "message": "End Time"
+  },
+   "SessionTerminateCause": {
+    "description": "SessionTerminateCause for logs",
+    "message": "Cause"
+  },
+	"dateTime": {
+    "description": "DateTime for logs",
+    "message": "DateTime"
+  },
+   "host": {
+    "description": "host for logs",
+    "message": "Host"
+  },
+   "user": {
+    "description": "user for logs",
+    "message": "User"
+  },
+   "method": {
+    "description": "Method for logs",
+    "message": "Method"
+  },
+   "resource": {
+    "description": "Resource for logs",
+    "message": "Resource"
+  },
+   "status": {
+    "description": "status for logs",
+    "message": "Status"
+  },
+	 "subTool": {
+    "description": "Tooltip message for subscriber",
+    "message": "Identity, or username, of the subscriber to authenticate."
+  },
+	"dataRateTool": {
+    "description": "Tooltip message for ascendDataRate",
+    "message": "Limit on received (download) data per second in bits."
+  },
+	"xmitRateTool": {
+    "description": "Tooltip message for ascendXmitRate",
+    "message": "Limit on transmitted (upload) data per second in bits."
+  },
+	"sessionTimeoutTool": {
+    "description": "Tooltip message for sessionTimeout",
+    "message": "Time between authorization requests in an active session in seconds."
+  },
+	"acctInterimIntervalTool": {
+    "description": "Tooltip message for acctInterimInterval",
+    "message": "Time between accounting interim updates in seconds."
+  },
+	"balanceTool": {
+    "description": "Tooltip message for balance",            
+    "message": "Initial credit value in bytes, against which accounting will debit usage against."
+  },
+	"enableTool": {
+    "description": "Tooltip message for enable", 
+    "message": "Temporarily enable, or disable, authorization for service."
+  },
+	"multiTool": {
+    "description": "Tooltip message for multisession", 
+    "message": "Allow multiple simultaneous sessions."
+  },
+	"subscriberAdded": {
+    "description": "Toast message for success",
+    "message": "Subscriber added"
+  },
+	"subscriberUpdated": {
+    "description": "Toast message for success",
+    "message": "Subscriber updated"
+  },
+	"subscriberDeleted": {
+    "description": "Toast message for success",
+    "message": "Subscriber deleted"
+  },
+	"identityCol": {
+    "description": "Identity label for generate identity",
+    "message": "Identity:"
+  },
+	"language": {
+    "description": "User language",
+    "message": "Language"
+  },
+	"users": {
+    "description": "User menu",
+    "message": "Users"
+  },
+	"usage": {
+    "description": "Usage",
+    "message": "Usage"
+  },
+	"AddUserTitle": {
+    "description": "Title for add User",
+    "message": "Add User"
+  },
+	"eng": {
+    "description": "Dropdown list item",
+    "message": "English"
+  },
+   "spa": {
+    "description": "Dropdown list item",
+    "message": "Spanish"
+  },
+   "updateUserTitle": {
+    "description": "User Title for Update",
+    "message": "Update User"
+  },
+   "userAdded": {
+    "description": "Success Toast Message",
+    "message": "User added"
+  },
+   "userUpdated": {
+    "description": "Success Toast Message",
+    "message": "User updated"
+  },
+   "userDeleted": {
+    "description": "Success Toast Message",
+    "message": "User deleted"
+  },
+   "clientIdentity": {
+    "description": "clients identity",
+    "message": "Client Identity"
+  },
+   "calledStation": {
+    "description": "Called Station for logs",
+    "message": "Called Station"
+  },
+   "out": {
+    "description": "Out (bytes) for logs",
+    "message": "Out"
+  },
+   "in": {
+    "description": "In (bytes) for logs",
+    "message": "In"
+  },
+   "totalo": {
+    "description": "Total (bytes) for logs",
+    "message": "Total"
+  },
+   "contact": {
+    "description": "Contact us option for users help",
+    "message": "Contact us"
+  },
+   "sendFeed": {
+    "description": "users can send feedback",
+    "message": "Send feedback"
+  },
+   "devDocs": {
+    "description": "Developer Documentation",
+    "message": "API Docs"
+  },
+   "help": {
+    "description": "users can get help",
+    "message": "Help"
+  },
+   "about": {
+    "description": "users can know about us",
+    "message": "About"
+  },
+	"tool": {
+    "description": "user can understand about download and refresh",
+    "message": "Toolbar"
+  },
+	"filt": {
+    "description": "filtering",
+    "message": "Filtering"
+  },
+	"credit": {
+    "description": "Balance management",
+    "message": "Credit"
+  },
+	"amount": {
+    "description": "Balance amount",
+    "message": "Amount"
+  },
+	"unit": {
+    "description": "Balance units",
+    "message": "Units"
+  },
+	"bytes": {
+    "description": "unit types",
+    "message": "Bytes"
+  },
+	"cents": {
+    "description": "unit types",
+    "message": "Cents"
+  },
+	"seconds": {
+    "description": "unit types",
+    "message": "Seconds"
+  },
+	"prod": {
+    "description": "Balance types",
+    "message": "Product"
+  },
+	"prod1": {
+    "description": "Balance types",
+    "message": "Products"
+  },
+	"prodId": {
+    "description": "Product Id",
+    "message": "Product Id"
+  },
+	"add": {
+    "description": "Balance add",
+    "message": "Add"
+  },
+	"multi": {
+    "description": "Multi session allowed",
+    "message": "MultiSession"
+  },
+	"offer": {
+    "description": "Offering product",
+    "message": "Offering"
+  },
+	"offers": {
+    "description": "Offering product",
+    "message": "Offers"
+  },
+	"prices": {
+    "description": "Offer product Prices",
+    "message": "Prices"
+  },
+	"alter": {
+    "description": "Offer product Prices alterations",
+    "message": "Alterations"
+  },
+	"name": {
+    "description": "Offer product name",
+    "message": "Name"
+  },
+	"des": {
+    "description": "Offer product description",
+    "message": "Description"
+  },
+	"start": {
+    "description": "Offer product startDate",
+    "message": "Start Date"
+  },
+	"end": {
+    "description": "Offer product endDate",
+    "message": "End Date"
+  },
+	"priceType": {
+    "description": "Offer product price type",
+    "message": "Price Type"
+  },
+	"unitSize": {
+    "description": "Offer product unit size",
+    "message": "Unit Size"
+  },
+	"currency": {
+    "description": "Offer product currency",
+    "message": "Currency"
+  },
+	"period": {
+    "description": "Offer product period",
+    "message": "Period"
+  },
+	"reserveTime": {
+    "description": "Time period to reserve on RADIUS start/interim accounting requests",
+    "message": "RADIUS Reserve Time"
+  },
+	"reserveBytes": {
+    "description": "Amount of data to reserve on RADIUS start/interim accounting requests",
+    "message": "RADIUS Reserve Data"
+  },
+	"subToastSucPro": {
+    "description": "Toast message for success for product",
+    "message": "Successfully added!"
+  },
+	"offerNameTool": {
+    "description": "name",
+    "message": "Name of the product"
+  },
+	"offerDesTool": {
+    "description": "product offering description",
+    "message": "Description of the product"
+  },
+	"offerStartTool": {
+    "description": "product offering start date",
+    "message": "Valid start date for product"
+  },
+	"offerEndTool": {
+    "description": "product offering end date",
+    "message": "Valid end date for product"
+  },
+	"priceNameTool": {
+    "description": "product offering price name",
+    "message": "Name of the product price"
+  },
+	"priceDesTool": {
+    "description": "product offering price description",
+    "message": "Name of the product description"
+  },
+	"priceStartTool": {
+    "description": "product offering price start date",
+    "message": "Valid start date for product price"
+  },
+	"priceEndTool": {
+    "description": "product offering price end date",
+    "message": "Valid end date product price"
+  },
+	"priceTypeTool": {
+    "description": "product offering type of price",
+    "message": "Types of prices"
+  },
+	"priceSizeTool": {
+    "description": "product offering unit size",
+    "message": "May use multipliers (k=kilo,m=mega,g=giga,m=minutes,h=hours)"
+  },
+	"priceUnitTool": {
+    "description": "product offering units",
+    "message": "Units for product price"
+  },
+	"priceAmountTool": {
+    "description": "product offering price amount",
+    "message": "Product offering price amount"
+  },
+	"priceCurrencyTool": {
+    "description": "product offering price currency",
+    "message": "Product offering price currency"
+  },
+	"pricePeriodTool": {
+    "description": "product offering price period",
+    "message": "Product offering price period"
+  },
+	"priceReserveTimeTool": {
+    "description": "Product offering price RADIUS reserve time",
+    "message": "Number of seconds to reserve on RADIUS initial/interim accounting request"
+  },
+	"priceReserveBytesTool": {
+    "description": "Product offering price RADIUS reserve data",
+    "message": "Amount of bytes to reserve on RADIUS initial/interim accounting request"
+  },
+	"priceAlterTool": {
+    "description": "product offering price alteration",
+    "message": "Add alteration to product offering price"
+  },
+   "productAdded": {
+    "description": "Success Toast Message",
+    "message": "Product added"
+  },
+   "productPriceAdded": {
+    "description": "Success Toast Message",
+    "message": "Product price added"
+  },
+   "productAlterationAdded": {
+    "description": "Success Toast Message",
+    "message": "Product alteration added"
+  },
+   "productUpdated": {
+    "description": "Success Toast Message",
+    "message": "Product updated"
+  },
+   "productSpec": {
+    "description": "product specification",
+    "message": "Product Specification"
+  },
+   "toastErrorSubPro": {
+    "description": "Toast error Message for subscriber product",
+    "message": "Not implemented"
+  },
+   "subProduct": {
+    "description": "Subscribed product",
+    "message": "Product"
+  },
+   "userNameTooltip": {
+    "description": "Name of user",
+    "message": "Name of user"
+  },
+   "userPasswordTooltip": {
+    "description": "password of user",
+    "message": "Password of user"
+  },
+   "userLangTooltip": {
+    "description": " of user",
+    "message": "Language of user"
+  },
+   "userUpdatePasswordTooltip": {
+    "description": "Update password of user",
+    "message": "New password of user"
+  },
+   "userUpdateLangTooltip": {
+    "description": "Updae language of user",
+    "message": "Update the language of user"
+  },
+   "addClientProtoTooltip": {
+    "description": "protocol of client",
+    "message": "Select protocol from dropdown menu"
+  },
+   "addSubAmountTooltip": {
+    "description": "Amount of balance",
+    "message": "Subscriber balance amount"
+  },
+   "addSubUnitTooltip": {
+    "description": "Unit of balance",
+    "message": "Subscriber balance units"
+  },
+   "addSubProTooltip": {
+    "description": "Product list for subscriber",
+    "message": "Select the product"
+  },
+   "subPasswordTooltip": {
+    "description": "password of subscriber",
+    "message": "New password of subscriber"
+  },
+   "updateSubProTooltip": {
+    "description": "Product list for subscriber",
+    "message": "Select and update the product"
+  },
+   "updateSubAmountTooltip": {
+    "description": "Amount of balance",
+    "message": "Update Subscriber balance amount"
+  },
+   "updateSubUnitTooltip": {
+    "description": "Unit of balance",
+    "message": "update subscriber balance units"
+  },
+   "validateToastError": {
+    "description": "Toast message for validation error",
+    "message": "Validation Failed"
+  },
+	"octets": {
+    "description": "Unit types",
+    "message": "Octets"
+  },
+	"priceTable": {
+    "description": "Prefix price table",
+    "message": "Prefix Price Table"
+  },
+	"tariffTable": {
+    "description": "Prefix tariff table",
+    "message": "Prefix Tariff Table"
+  },
+	"timeDay": {
+    "description": "Time day range",
+    "message": "Time of day range"
+  },
+	"ratePrice": {
+    "description": "Rate Price",
+    "message": "Rated Price"
+  },
+	"priceTableTool": {
+    "description": "Prefix price table tooltip",
+    "message": "Prefix of Destination Price Table"
+  },
+	"tariffTableTool": {
+    "description": "Prefix tariff table tooltip",
+    "message": "Prefix of Destination Tarrif Table"
+  },
+	"timeDayTool": {
+    "description": "Time day range tooltip",
+    "message": "Time Of Day Range"
+  },
+	"ratedPrice": {
+    "description": "Rate Price tooltip",
+    "message": "Price name in table"
+  },
+	"table": {
+    "description": "Prefix table",
+    "message": "Tables"
+  },
+	"prefix": {
+    "description": "Prefix table",
+    "message": "Prefix"
+  },
+	"priceName": {
+    "description": "Name of table",
+    "message": "Price Name"
+  },
+	"addPrefix": {
+    "description": "Add prefix toolbar heading",
+    "message": "Add Prefix"
+  },
+	"updatePrefix": {
+    "description": "Update prefix toolbar heading",
+    "message": "Update Prefix"
+  },
+	"startTime": {
+    "description": "Time of Day Range start time",
+    "message": "Start Time"
+  },
+	"endTime": {
+    "description": "Time of Day Range end time",
+    "message": "End Time"
+  },
+	"preData": {
+    "description": "Prepaid Data",
+    "message": "Prepaid Data"
+  },
+	"preVoice": {
+    "description": "Prepaid Voice",
+    "message": "Prepaid Voice"
+  },
+	"preSMS": {
+    "description": "Prepaid SMS",
+    "message": "Prepaid SMS"
+  },
+	"resSession": {
+    "description": "Radius reserve session time",
+    "message": "RADIUS Reserve Session Time"
+  },
+	"resSessionTool": {
+    "description": "Radius reserve session time tool tip",
+    "message": "Access request reservation amount in seconds"
+  },
+	"addTable": {
+    "description": "Add new table",
+    "message": "Add Table"
+  },
+	"listTable": {
+    "description": "List tables",
+    "message": "List of Tables"
+  },
+	"callIncome": {
+    "description": "Call direction characteristics",
+    "message": "Incoming"
+  },
+	"callOutgoing": {
+    "description": "Call direction characteristics",
+    "message": "Outgoing"
+  },
+	"callIncomeTool": {
+    "description": "Call direction characteristics tool tip",
+    "message": "Incoming call direction(answer)"
+  },
+	"callOutgoingTool": {
+    "description": "Call direction characteristics tool tip",
+    "message": "Outgoing call direction(originate)"
+  },
+	"callIncomeUpdateTool": {
+    "description": "Call direction characteristics tool tip",
+    "message": "Update incoming call direction(answer)"
+  },
+	"callOutgoingUpdateTool": {
+    "description": "Call direction characteristics tool tip",
+    "message": "Update outgoing call direction(originate)"
+  },
+	"bundleProducts": {
+    "description": "Bundle products label for iron collapse",
+    "message": "Bundled Products"
+  },
+	"characteristics": {
+    "description": "Characteristics label for iron collapse",
+    "message": "Characteristics"
+  },
+	"callDirection": {
+    "description": "Call direction label for iron collapse",
+    "message": "Called direction"
+  },
+	"ok": {
+    "description": "Ok button",
+    "message": "OK"
+  },
+	"offering": {
+    "description": "Product offering tab",
+    "message": "Offerings"
+  },
+	"rate": {
+    "description": "Resource rating",
+    "message": "Rate"
+  },
+	"action": {
+    "description": "Action",
+    "message": "Action"
+  },
+	"bucket": {
+    "description": "Bucket balance",
+    "message": "Bucket"
+  },
+	"bucketId": {
+    "description": "Bucket Id",
+    "message": "Bucket Id"
+  },
+	"amountAfter": {
+    "description": "Balance amount after",
+    "message": "After"
+  },
+	"amountBefore": {
+    "description": "Balance amount Before",
+    "message": "Before"
+  },
+	"amountTransaction": {
+    "description": "Transaction amount",
+    "message": "Amount"
+  },
+	"dateTime": {
+    "description": "Date&Time",
+    "message": "Date & Time"
+  },
+	"price": {
+    "description": "Price",
+    "message": "Price"
+  },
+	"callCompletion": {
+    "description": "CallCompletionCode",
+    "message": "call Completion Code"
+  },
+	"hostName": {
+    "description": "HostName",
+    "message": "Host Name"
+  },
+	"subscriberId": {
+    "description": "SubscriberId",
+    "message": "Subscriber Id"
+  },
+	"uniqueCallID": {
+    "description": "UniqueCallID",
+    "message": "UniqueCall Id"
+  },
+	"disconnectReason": {
+    "description": "DisconnectReason",
+    "message": "Disconnect Reason"
+  },
+	"destinationID": {
+    "description": "DestinationID",
+    "message": "Destination Id"
+  },
+	"catalog": {
+    "description": "Catalog",
+    "message": "Catalog"
+  },
+	"service": {
+    "description": "Services",
+    "message": "Services"
+  },
+	"bucketBal": {
+    "description": "Balance bucket",
+    "message": "Balance Buckets"
+  },
+	"wlan": {
+    "description": "wlan",
+    "message": "WLAN"
+  },
+	"voip": {
+    "description": "voip",
+    "message": "VoIP"
+  },
+	"proOffer": {
+    "description": "product Offer",
+    "message": "Product Offer"
+  },
+	"servId": {
+    "description": "Service Id",
+    "message": "Service Id"
+  },
+	"RomaingTab": {
+    "description": "Roaming Table",
+    "message": "Roaming Table"
+  },
+  "akak": {
+    "description": "Service Akak",
+    "message": "AKA K"
+  },
+  "akaOpc": {
+    "description": "Service AkaOpc",
+    "message": "AKA OPc"
+  },
+   "productDeleted": {
+    "description": "Success Toast Message",
+    "message": "Product deleted"
+  }
+}
