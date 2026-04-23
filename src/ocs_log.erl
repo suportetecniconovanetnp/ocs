@@ -79,6 +79,13 @@
 -define(usageSpecPath, "/usageManagement/v1/usageSpecification/").
 -define(usagePath, "/usageManagement/v1/usage/").
 
+%% Upper bound for any session-duration value sourced from a NAS attribute.
+%% See ocs_rest_res_usage:session_time_acc/2 for rationale — Acct-Session-Time
+%% per RFC 2866 §5.7 is elapsed seconds; values larger than ten years are
+%% almost certainly an Event-Timestamp leaked into the wrong slot by a
+%% misbehaving NAS.
+-define(MAX_SESSION_SECONDS, 315360000).  % 10 years
+
 -type timestamp() :: pos_integer().
 -type unique() :: pos_integer().
 -type protocol() :: radius | diameter | nrf.
@@ -3454,6 +3461,20 @@ ipdr_ims_voip1([], _Protocol, _TimeStamp, _ReqType, _Req, _Res, _Rated, IPDR) ->
 ipdr_wlan(Protocol, TimeStamp, ReqType, Req, Res, Rated) ->
 	ipdr_wlan1(record_info(fields, ipdr_wlan), Protocol, TimeStamp,
 			ReqType, Req, Res, Rated, #ipdr_wlan{}).
+
+%% @hidden
+%% Return Value unchanged when it's a plausible elapsed-seconds count;
+%% otherwise `undefined` so the IPDR Duration column stays empty rather
+%% than carrying a corrupt number (typically an Event-Timestamp leaked
+%% into Acct-Session-Time by a non-conforming NAS).
+plausible_session_time(undefined) ->
+	undefined;
+plausible_session_time(Value) when is_integer(Value), Value >= 0,
+		Value =< ?MAX_SESSION_SECONDS ->
+	Value;
+plausible_session_time(_BogusValue) ->
+	undefined.
+
 %% @hidden
 ipdr_wlan1([ipdrCreationTime | T], Protocol, TimeStamp, stop, Req, Resp, Rated, IPDR) ->
 	NewIPDR = IPDR#ipdr_wlan{ipdrCreationTime = iso8601(TimeStamp)},
@@ -3632,7 +3653,7 @@ ipdr_wlan1([userIpAddress | T], nrf = Protocol, TimeStamp, stop,
 	end,
 	ipdr_wlan1(T, Protocol, TimeStamp, stop, Req, Resp, Rated, NewIPDR);
 ipdr_wlan1([sessionDuration | T], radius = Protocol, TimeStamp, stop, Req, Resp, Rated, IPDR) ->
-		SessionTime = proplists:get_value(?AcctSessionTime, Req),
+		SessionTime = plausible_session_time(proplists:get_value(?AcctSessionTime, Req)),
 		NewIPDR = IPDR#ipdr_wlan{sessionDuration = SessionTime},
 	ipdr_wlan1(T, Protocol, TimeStamp, stop, Req, Resp, Rated, NewIPDR);
 ipdr_wlan1([sessionDuration | T], Protocol, TimeStamp, stop, Req, Resp, Rated, IPDR) ->
@@ -3673,8 +3694,12 @@ ipdr_wlan1([gmtSessionEndDateTime | T], radius = Protocol, TimeStamp, stop, Req,
 			TimeStamp
 	end,
 	StartTime = case radius_attributes:find(?AcctSessionTime, Req) of
-		{ok, Duration} ->
+		{ok, Duration} when is_integer(Duration), Duration >= 0,
+				Duration =< ?MAX_SESSION_SECONDS ->
 			iso8601(EndTime - (Duration * 1000));
+		{ok, _BogusDuration} ->
+			% Implausible session time (likely Event-Timestamp leak) — skip
+			undefined;
 		{error, not_found} ->
 			undefined
 	end,
