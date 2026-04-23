@@ -8,10 +8,17 @@ ambiente e logs (incluindo IPDR) acessíveis diretamente no host.
 Na raiz do repositório:
 
 ```bash
-cp .env.example .env       # ajuste as portas / nomes / segredos
-mkdir -p data              # diretorio onde logs / db / certs serao bindados
+cp .env.example .env              # ajuste as portas / nomes / segredos
+mkdir -p data                     # diretorio onde logs / db / certs serao bindados
+sudo chown -R 1000:1000 data      # UID do user `otp` na imagem (fixado em 1000)
 docker compose up -d
 ```
+
+> A imagem fixa `UID=1000` e `GID=1000` para o usuário `otp`. Se preferir outro
+> UID, rebuild com `docker build --build-arg OCS_UID=<X> --build-arg OCS_GID=<Y> ...`
+> e aplique o mesmo `chown` nos diretórios do host. Imagens antigas (antes dessa
+> mudança) usam UID dinâmico do `useradd --system`: descubra com
+> `docker run --rm --entrypoint id <imagem> otp` e faça `chown` com o valor retornado.
 
 A partir de agora:
 

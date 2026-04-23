@@ -76,14 +76,21 @@ ENV OCS_HOME=/home/otp
 ENV OCS_NODENAME=ocs
 ENV OCS_INIT_DB=true
 
+# Fixed UID/GID so host bind mounts can be chowned to a predictable owner
+# (avoids the "Permission denied" mkdir failure on first start when the host
+# directory is owned by an unrelated user). Matches the conventional first
+# user on most Linux hosts — easy to align with `chown 1000:1000`.
+ARG OCS_UID=1000
+ARG OCS_GID=1000
+
 RUN sed -i 's|deb.debian.org/debian|archive.debian.org/debian|g; s|deb.debian.org/debian-security|archive.debian.org/debian-security|g' /etc/apt/sources.list \
     && sed -i '/buster-updates/d' /etc/apt/sources.list \
     && printf 'Acquire::Check-Valid-Until "false";\n' > /etc/apt/apt.conf.d/99no-check-valid-until \
     && apt-get update \
     && apt-get install -y --no-install-recommends bash openssl tini \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system otp \
-    && useradd --system --create-home --gid otp --home-dir /home/otp --shell /bin/bash otp
+    && groupadd --gid ${OCS_GID} otp \
+    && useradd --uid ${OCS_UID} --gid ${OCS_GID} --create-home --home-dir /home/otp --shell /bin/bash otp
 
 COPY --from=builder /opt/ocs-root/home/otp/ /home/otp/
 COPY docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
