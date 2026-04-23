@@ -10,21 +10,29 @@ export const catalogApi = {
   },
   /**
    * SigScale OCS does not implement GET /productOffering/{id}. The legacy
-   * Polymer UI always populates the edit form from the list response, which
-   * already contains the full offering payload (prices, prodSpecCharValueUse).
+   * Polymer UI always populates the edit form from the list response (which
+   * already contains the full offering payload — prices and
+   * prodSpecCharValueUse), and the Vaadin-style `id.like=[<value>%]` filter
+   * crashes the backend with a 500 when the value contains characters like
+   * `-` or when the trailing `%` wildcard is missing.
    *
-   * To support deep links (`/catalog/:id`) we fall back to the list endpoint
-   * with a Vaadin-style `id.like=[<id>]` filter and pull the first match.
+   * To stay backend-agnostic we paginate the unfiltered list and find the
+   * matching id client-side. Catalogs are typically small (dozens of
+   * offerings), so the cost is negligible.
    */
   async getOffering(id: string): Promise<ProductOffering> {
-    const filter = `"[{id.like=[${id}]}]"`;
-    const list = await getList<ProductOffering>(`${BASE}/productOffering`, {
-      headers: rangeHeader(0, 0),
-      params: { filter },
-    });
-    const found = list.items.find((o) => o.id === id) ?? list.items[0];
-    if (!found) throw new Error(`Offering "${id}" not found`);
-    return found;
+    const PAGE = 50;
+    let start = 0;
+    while (true) {
+      const list = await getList<ProductOffering>(`${BASE}/productOffering`, {
+        headers: rangeHeader(start, start + PAGE - 1),
+      });
+      const found = list.items.find((o) => o.id === id);
+      if (found) return found;
+      if (list.items.length < PAGE) break; // exhausted
+      start += PAGE;
+    }
+    throw new Error(`Offering "${id}" not found`);
   },
   createOffering(payload: Partial<ProductOffering>): Promise<ProductOffering> {
     return http.post<ProductOffering>(`${BASE}/productOffering`, payload).then((r) => r.data);
