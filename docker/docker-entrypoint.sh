@@ -1,12 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export HOME="${HOME:-/home/otp}"
-export OCS_HOME="${OCS_HOME:-/home/otp}"
-export OCS_NODENAME="${OCS_NODENAME:-ocs}"
-export OCS_DEBUG="${OCS_DEBUG:-true}"
-export OCS_ERLANG_ROOT="${OCS_ERLANG_ROOT:-/usr/local/lib/erlang}"
-export OCS_SYS_CONFIG="${OCS_SYS_CONFIG:-}"
+# Assign a default to an environment variable if unset or empty.
+# Uses explicit string assignment instead of ${VAR:-default} because the
+# latter is fragile when the default contains characters the bash lexer
+# treats specially (notably `{...,...}` which can trigger brace expansion).
+env_default() {
+  local name="$1" default="$2"
+  if [[ -z "${!name:-}" ]]; then
+    printf -v "${name}" '%s' "${default}"
+  fi
+  export "${name}"
+}
+
+env_default HOME '/home/otp'
+env_default OCS_HOME '/home/otp'
+env_default OCS_NODENAME 'ocs'
+env_default OCS_DEBUG 'true'
+env_default OCS_ERLANG_ROOT '/usr/local/lib/erlang'
+env_default OCS_SYS_CONFIG ''
 
 # ----------------------------------------------------------------------------
 # Defaults for env-driven sys.config rendering.
@@ -17,58 +29,58 @@ export OCS_SYS_CONFIG="${OCS_SYS_CONFIG:-}"
 # ----------------------------------------------------------------------------
 
 # RADIUS
-export OCS_RADIUS_AUTH_ADDR="${OCS_RADIUS_AUTH_ADDR:-0.0.0.0}"
-export OCS_RADIUS_AUTH_PORT="${OCS_RADIUS_AUTH_PORT:-1812}"
-export OCS_RADIUS_ACCT_ADDR="${OCS_RADIUS_ACCT_ADDR:-0.0.0.0}"
-export OCS_RADIUS_ACCT_PORT="${OCS_RADIUS_ACCT_PORT:-1813}"
+env_default OCS_RADIUS_AUTH_ADDR '0.0.0.0'
+env_default OCS_RADIUS_AUTH_PORT '1812'
+env_default OCS_RADIUS_ACCT_ADDR '0.0.0.0'
+env_default OCS_RADIUS_ACCT_PORT '1813'
 
 # Diameter
-export OCS_DIAMETER_ACCT_ADDR="${OCS_DIAMETER_ACCT_ADDR:-0.0.0.0}"
-export OCS_DIAMETER_ACCT_PORT="${OCS_DIAMETER_ACCT_PORT:-3868}"
-export OCS_DIAMETER_AUTH_ADDR="${OCS_DIAMETER_AUTH_ADDR:-0.0.0.0}"
-export OCS_DIAMETER_AUTH_PORT="${OCS_DIAMETER_AUTH_PORT:-3869}"
-export OCS_DIAMETER_ORIGIN_HOST="${OCS_DIAMETER_ORIGIN_HOST:-ocs.localdomain}"
-export OCS_DIAMETER_ORIGIN_REALM="${OCS_DIAMETER_ORIGIN_REALM:-localdomain}"
+env_default OCS_DIAMETER_ACCT_ADDR '0.0.0.0'
+env_default OCS_DIAMETER_ACCT_PORT '3868'
+env_default OCS_DIAMETER_AUTH_ADDR '0.0.0.0'
+env_default OCS_DIAMETER_AUTH_PORT '3869'
+env_default OCS_DIAMETER_ORIGIN_HOST 'ocs.localdomain'
+env_default OCS_DIAMETER_ORIGIN_REALM 'localdomain'
 
 # HTTP
-export OCS_HTTP_PORT="${OCS_HTTP_PORT:-8080}"
-export OCS_HTTP_TLS="${OCS_HTTP_TLS:-false}"
-export OCS_HTTP_AUTH_REQUIRE_GROUP="${OCS_HTTP_AUTH_REQUIRE_GROUP:-staff}"
-export OCS_HTTP_LOG_SIZE_BYTES="${OCS_HTTP_LOG_SIZE_BYTES:-10485760}"
-export OCS_HTTP_LOG_FILE_COUNT="${OCS_HTTP_LOG_FILE_COUNT:-10}"
+env_default OCS_HTTP_PORT '8080'
+env_default OCS_HTTP_TLS 'false'
+env_default OCS_HTTP_AUTH_REQUIRE_GROUP 'staff'
+env_default OCS_HTTP_LOG_SIZE_BYTES '10485760'
+env_default OCS_HTTP_LOG_FILE_COUNT '10'
 
 # Logs (relative to OCS_HOME unless absolute)
-export OCS_ACCT_LOG_DIR="${OCS_ACCT_LOG_DIR:-log/acct}"
-export OCS_AUTH_LOG_DIR="${OCS_AUTH_LOG_DIR:-log/auth}"
-export OCS_ABMF_LOG_DIR="${OCS_ABMF_LOG_DIR:-log/abmf}"
-export OCS_IPDR_LOG_DIR="${OCS_IPDR_LOG_DIR:-log/ipdr}"
-export OCS_HTTP_LOG_DIR="${OCS_HTTP_LOG_DIR:-log/http}"
-export OCS_EXPORT_DIR="${OCS_EXPORT_DIR:-log/export}"
-export OCS_ACCT_LOG_ROTATE_MIN="${OCS_ACCT_LOG_ROTATE_MIN:-1440}"
-export OCS_ACCT_LOG_ROTATE_TIME="${OCS_ACCT_LOG_ROTATE_TIME:-{4,4,4}}"
+env_default OCS_ACCT_LOG_DIR 'log/acct'
+env_default OCS_AUTH_LOG_DIR 'log/auth'
+env_default OCS_ABMF_LOG_DIR 'log/abmf'
+env_default OCS_IPDR_LOG_DIR 'log/ipdr'
+env_default OCS_HTTP_LOG_DIR 'log/http'
+env_default OCS_EXPORT_DIR 'log/export'
+env_default OCS_ACCT_LOG_ROTATE_MIN '1440'
+env_default OCS_ACCT_LOG_ROTATE_TIME '{4,4,4}'
 
 # TLS
-export OCS_TLS_KEY="${OCS_TLS_KEY:-ssl/key.pem}"
-export OCS_TLS_CERT="${OCS_TLS_CERT:-ssl/cert.pem}"
-export OCS_TLS_CACERT="${OCS_TLS_CACERT:-ssl/ca.pem}"
+env_default OCS_TLS_KEY 'ssl/key.pem'
+env_default OCS_TLS_CERT 'ssl/cert.pem'
+env_default OCS_TLS_CACERT 'ssl/ca.pem'
 
 # Mnesia / SNMP
-export OCS_MNESIA_DIR="${OCS_MNESIA_DIR:-db}"
-export OCS_SNMP_CONF_DIR="${OCS_SNMP_CONF_DIR:-snmp/conf}"
-export OCS_SNMP_DB_DIR="${OCS_SNMP_DB_DIR:-snmp/db}"
+env_default OCS_MNESIA_DIR 'db'
+env_default OCS_SNMP_CONF_DIR 'snmp/conf'
+env_default OCS_SNMP_DB_DIR 'snmp/db'
 
 # Session-charging policy (mirrors docker/sys.config.session-policy.example)
-export OCS_MIN_RESERVE_OCTETS="${OCS_MIN_RESERVE_OCTETS:-10000000}"
-export OCS_MIN_RESERVE_SECONDS="${OCS_MIN_RESERVE_SECONDS:-60}"
-export OCS_MIN_RESERVE_MESSAGES="${OCS_MIN_RESERVE_MESSAGES:-1}"
-export OCS_EXPLICIT_RESERVE_POLICY="${OCS_EXPLICIT_RESERVE_POLICY:-requested}"
-export OCS_EXPLICIT_RESERVE_OCTETS="${OCS_EXPLICIT_RESERVE_OCTETS:-undefined}"
-export OCS_EXPLICIT_RESERVE_SECONDS="${OCS_EXPLICIT_RESERVE_SECONDS:-undefined}"
-export OCS_EXPLICIT_RESERVE_MESSAGES="${OCS_EXPLICIT_RESERVE_MESSAGES:-undefined}"
-export OCS_MAX_RESERVE_OCTETS="${OCS_MAX_RESERVE_OCTETS:-10000000}"
-export OCS_MAX_RESERVE_SECONDS="${OCS_MAX_RESERVE_SECONDS:-undefined}"
-export OCS_MAX_RESERVE_MESSAGES="${OCS_MAX_RESERVE_MESSAGES:-undefined}"
-export OCS_SESSION_DEBUG_LOGS="${OCS_SESSION_DEBUG_LOGS:-false}"
+env_default OCS_MIN_RESERVE_OCTETS '10000000'
+env_default OCS_MIN_RESERVE_SECONDS '60'
+env_default OCS_MIN_RESERVE_MESSAGES '1'
+env_default OCS_EXPLICIT_RESERVE_POLICY 'requested'
+env_default OCS_EXPLICIT_RESERVE_OCTETS 'undefined'
+env_default OCS_EXPLICIT_RESERVE_SECONDS 'undefined'
+env_default OCS_EXPLICIT_RESERVE_MESSAGES 'undefined'
+env_default OCS_MAX_RESERVE_OCTETS '10000000'
+env_default OCS_MAX_RESERVE_SECONDS 'undefined'
+env_default OCS_MAX_RESERVE_MESSAGES 'undefined'
+env_default OCS_SESSION_DEBUG_LOGS 'false'
 
 log() {
   printf '[ocs-entrypoint] %s\n' "$*"
@@ -261,6 +273,14 @@ apply_custom_sys_config() {
       "${target}"
   else
     render_sys_config "${target}"
+  fi
+
+  # Help diagnose rendering issues (empty vars, bad quoting, etc.) by
+  # dumping the resolved file under DEBUG. Erlang reports only the line
+  # number on a syntax error, so seeing the rendered content is essential.
+  if [[ "${OCS_DEBUG}" == "true" ]]; then
+    log "conteudo do sys.config ativo (${target}):"
+    nl -ba "${target}" >&2 || cat "${target}" >&2
   fi
 }
 
