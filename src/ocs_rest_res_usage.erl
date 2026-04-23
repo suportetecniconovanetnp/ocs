@@ -34,6 +34,16 @@
 -define(usageSpecPath, "/usageManagement/v1/usageSpecification/").
 -define(usagePath, "/usageManagement/v1/usage/").
 
+%% Sanity bound for any session-duration value sourced from a NAS attribute or
+%% Diameter AVP. RFC 2866 §5.7 (Acct-Session-Time) and RFC 4006 §8.21 (CC-Time)
+%% both define the value as elapsed seconds for the session — a real value can
+%% never plausibly exceed ~10 years. Some NAS firmwares incorrectly populate
+%% Acct-Session-Time with the current Unix epoch (e.g. 1.7×10⁹ in 2026), which
+%% is then faithfully recorded by the OCS. We treat such values as invalid and
+%% omit the characteristic rather than propagate corrupt data downstream
+%% (UI, IPDR, CDR).
+-define(MAX_SESSION_SECONDS, 315360000).  % 10 years
+
 % calendar:datetime_to_gregorian_seconds({{1970,1,1},{0,0,0}})
 -define(EPOCH, 62167219200).
 
@@ -2759,18 +2769,13 @@ char_attr_session_time(#'3gpp_ro_CCR'{'Multiple-Services-Credit-Control'
 			(_, Acc1) ->
 				Acc1
 	end,
-	NewAcc = case lists:foldl(Fold, 0, MSCC) of
-		0 ->
-			Acc;
-		TotalTime ->
-			[{struct, [{"name", "acctSessionTime"}, {"value", TotalTime}]} | Acc]
-	end,
+	NewAcc = session_time_acc(lists:foldl(Fold, 0, MSCC), Acc),
 	char_attr_input_octets(CCR, NewAcc);
 char_attr_session_time(Attributes, Acc)
 		when is_list(Attributes) ->
 	NewAcc = case radius_attributes:find(?AcctSessionTime, Attributes) of
 		{ok, Value} ->
-			[{struct, [{"name", "acctSessionTime"}, {"value", Value}]} | Acc];
+			session_time_acc(Value, Acc);
 		{error, not_found} ->
 			Acc
 	end,
@@ -2782,15 +2787,30 @@ char_attr_session_time(#{"serviceRating" := ServiceRating} = NrfRequest, Acc)
 			(_, Acc1) ->
 				Acc1
 	end,
-	NewAcc = case lists:foldl(Fold, 0, ServiceRating) of
-		0 ->
-			Acc;
-		Time1 ->
-			[{struct, [{"name", "acctSessionTime"}, {"value", Time1}]} | Acc]
-	end,
+	NewAcc = session_time_acc(lists:foldl(Fold, 0, ServiceRating), Acc),
 	char_attr_input_octets(NrfRequest, NewAcc);
 char_attr_session_time(Request, Acc) ->
 	char_attr_input_octets(Request, Acc).
+
+%% @hidden
+%% Append `acctSessionTime` characteristic only when the value is a plausible
+%% elapsed-seconds count. Drops zero (no session activity to report) and
+%% values exceeding ?MAX_SESSION_SECONDS (almost certainly an Event-Timestamp
+%% mistakenly placed in Acct-Session-Time / CC-Time by a non-conforming NAS).
+session_time_acc(0, Acc) ->
+	Acc;
+session_time_acc(Value, Acc) when is_integer(Value), Value > 0,
+		Value =< ?MAX_SESSION_SECONDS ->
+	[{struct, [{"name", "acctSessionTime"}, {"value", Value}]} | Acc];
+session_time_acc(Value, Acc) when is_integer(Value), Value > ?MAX_SESSION_SECONDS ->
+	error_logger:warning_report(["Implausible session duration discarded",
+			{module, ?MODULE},
+			{value, Value},
+			{max, ?MAX_SESSION_SECONDS},
+			{hint, "likely Event-Timestamp leaked into Acct-Session-Time"}]),
+	Acc;
+session_time_acc(_Value, Acc) ->
+	Acc.
 
 %% @hidden
 char_attr_input_octets(#'3gpp_ro_CCR'{'Multiple-Services-Credit-Control'
