@@ -35,8 +35,10 @@ function row(item: Usage) {
     username: characteristic(item, 'username'),
     imsi: characteristic(item, 'imsi'),
     msisdn: characteristic(item, 'msisdn'),
-    inputOctets: characteristicNumber(item, 'acctInputOctets'),
-    outputOctets: characteristicNumber(item, 'acctOutputOctets'),
+    // SigScale uses inputOctets/outputOctets (not acct-prefixed) — see
+    // legacy sig-accounting-list.js characteristic lookups.
+    inputOctets: characteristicNumber(item, 'inputOctets'),
+    outputOctets: characteristicNumber(item, 'outputOctets'),
     duration: characteristicNumber(item, 'acctSessionTime'),
   };
 }

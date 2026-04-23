@@ -1,7 +1,8 @@
-import { http, getList, rangeHeader, type PagedResult } from './http';
+import { http, getList, rangeHeader, encodePath, type PagedResult } from './http';
 import type { Characteristic } from '@/types/tmf';
 
 const BASE = '/partyManagement/v1/individual';
+const enc = encodePath;
 
 export interface OcsUser {
   id: string;
@@ -21,7 +22,7 @@ export const usersApi = {
     return getList<OcsUser>(BASE, { headers: rangeHeader(start, end) });
   },
   get(id: string): Promise<OcsUser> {
-    return http.get<OcsUser>(`${BASE}/${id}`).then((r) => r.data);
+    return http.get<OcsUser>(`${BASE}/${enc(id)}`).then((r) => r.data);
   },
   create(input: UserFormInput): Promise<OcsUser> {
     const payload: OcsUser = {
@@ -36,6 +37,6 @@ export const usersApi = {
     return http.post<OcsUser>(BASE, payload).then((r) => r.data);
   },
   delete(id: string): Promise<void> {
-    return http.delete(`${BASE}/${id}`).then(() => undefined);
+    return http.delete(`${BASE}/${enc(id)}`).then(() => undefined);
   },
 };

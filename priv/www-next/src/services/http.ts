@@ -23,6 +23,20 @@ export class OcsApiError extends Error {
   }
 }
 
+/**
+ * Strict path-segment encoder for SigScale OCS REST endpoints.
+ *
+ * `encodeURIComponent` leaves `(`, `)`, `!`, `*`, `'` unescaped — the SigScale
+ * Erlang HTTP server (mochiweb/inets) treats unencoded `(` and `)` as syntax
+ * errors when reaching the catalog router, returning a 404. This wrapper
+ * percent-encodes them so identifiers like `Voice & Data (1G)` round-trip.
+ */
+export function encodePath(segment: string): string {
+  return encodeURIComponent(segment).replace(/[!'()*]/g, (c) =>
+    `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+}
+
 export interface PagedResult<T> {
   items: T[];
   total?: number;
@@ -43,11 +57,36 @@ function parseContentRange(header: string | undefined): PagedResult<unknown>['co
   };
 }
 
+/**
+ * SigScale's Vaadin-style filter expressions contain `[ ] { } =` chars that
+ * its URL parser rejects when percent-encoded (the legacy `iron-ajax` keeps
+ * them raw). Axios's default `URLSearchParams` encodes everything aggressively,
+ * which yields HTTP 400 from `/usageManagement/v1/usage?filter=...`.
+ *
+ * This serializer leaves the filter-syntax characters intact and only escapes
+ * the chars that would actually break URL parsing (`& # ? + space`).
+ */
+function ocsParamsSerializer(params: Record<string, unknown>): string {
+  const safeEncode = (raw: string) =>
+    raw
+      .replace(/%/g, '%25')
+      .replace(/&/g, '%26')
+      .replace(/#/g, '%23')
+      .replace(/\?/g, '%3F')
+      .replace(/\+/g, '%2B')
+      .replace(/ /g, '%20');
+  return Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== null)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${safeEncode(String(v))}`)
+    .join('&');
+}
+
 export const http: AxiosInstance = axios.create({
   baseURL: '/',
   timeout: 30_000,
   headers: { Accept: 'application/json' },
   withCredentials: true,
+  paramsSerializer: ocsParamsSerializer,
 });
 
 http.interceptors.request.use((config) => {
@@ -69,10 +108,48 @@ http.interceptors.request.use((config) => {
 
 http.interceptors.response.use(
   (response) => response,
-  (error: AxiosError<ProblemDetails>) => {
+  (error: AxiosError<ProblemDetails | string>) => {
     const status = error.response?.status ?? 0;
-    const problem = error.response?.data;
-    const message = problem?.detail ?? problem?.title ?? error.message;
+    const data = error.response?.data;
+    let problem: ProblemDetails | undefined;
+    let message: string;
+    if (data && typeof data === 'object') {
+      problem = data;
+      message = problem.detail ?? problem.title ?? problem.cause ?? error.message;
+      if (problem.invalidParams?.length) {
+        const params = problem.invalidParams.map((p) => `${p.param}: ${p.reason}`).join('; ');
+        message = `${message} (${params})`;
+      }
+    } else if (typeof data === 'string' && data.trim()) {
+      // Some SigScale endpoints return plain-text errors instead of JSON
+      message = data.length > 200 ? `${data.slice(0, 200)}…` : data;
+    } else {
+      message = error.message;
+    }
+    if (status) message = `${status} ${message}`;
+
+    // Surface request/response details in the dev console so 4xx failures
+    // can be diagnosed without opening DevTools network panel.
+    if (import.meta.env.DEV && status >= 400) {
+      const cfg = error.config;
+      const method = cfg?.method?.toUpperCase() ?? 'REQ';
+      const url = cfg?.url ?? '';
+      const reqBody = typeof cfg?.data === 'string' ? cfg.data : JSON.stringify(cfg?.data);
+      const resBody =
+        data === undefined || data === null
+          ? '<empty>'
+          : typeof data === 'string'
+            ? data
+            : JSON.stringify(data);
+      const ct = (error.response?.headers as Record<string, string> | undefined)?.['content-type'];
+      console.error(
+        `[OCS API] ${method} ${url} -> ${status}\n` +
+          `  request:  ${reqBody}\n` +
+          `  response: ${resBody}\n` +
+          `  content-type: ${ct ?? '<none>'}`,
+      );
+    }
+
     return Promise.reject(new OcsApiError(message, status, problem));
   },
 );

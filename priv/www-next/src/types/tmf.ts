@@ -9,8 +9,12 @@ export type Iso8601 = string;
 export type Money = { unit: string; value: number };
 
 export interface Quantity {
-  amount: number;
-  units: string;
+  /**
+   * SigScale serialises `amount` as a string with a unit suffix for non-cents
+   * buckets ("1500b", "60s", "10msg") and as a number for cents.
+   */
+  amount: number | string;
+  units: 'cents' | 'octets' | 'seconds' | 'messages' | string;
 }
 
 export interface RelatedParty {
@@ -26,17 +30,69 @@ export interface Characteristic {
   valueType?: string;
 }
 
-export interface ProductOffering {
+export type LifecycleStatus =
+  | 'In Study'
+  | 'In Design'
+  | 'In Test'
+  | 'Active'
+  | 'Rejected'
+  | 'Launched'
+  | 'Retired'
+  | 'Obsolete';
+
+export interface ValidFor {
+  startDateTime?: Iso8601;
+  endDateTime?: Iso8601;
+}
+
+export interface ProductSpecificationRef {
   id: string;
   href?: string;
+  name?: string;
+}
+
+export interface ProdSpecCharValue {
+  default?: boolean;
+  value: string | number | boolean;
+  valueType?: string;
+  unitOfMeasure?: string;
+}
+
+export interface ProdSpecCharValueUse {
   name: string;
   description?: string;
-  isBundle?: boolean;
-  lifecycleStatus?: 'In Study' | 'In Design' | 'In Test' | 'Active' | 'Launched' | 'Retired';
-  validFor?: { startDateTime?: Iso8601; endDateTime?: Iso8601 };
-  productOfferingPrice?: ProductOfferingPrice[];
-  category?: { id: string; name: string }[];
-  bundledProductOffering?: { id: string; name?: string }[];
+  minCardinality?: number;
+  maxCardinality?: number;
+  productSpecCharacteristicValue: ProdSpecCharValue[];
+  productSpecification?: ProductSpecificationRef;
+}
+
+export interface BundledProductOfferingOption {
+  numberRelOfferLowerLimit?: number;
+  numberRelOfferUpperLimit?: number;
+  numberRelOfferDefault?: number;
+}
+
+export interface BundledProductOffering {
+  id: string;
+  href?: string;
+  name?: string;
+  bundledProductOfferingOption?: BundledProductOfferingOption;
+}
+
+export interface PriceTaxIncluded {
+  taxIncludedAmount?: number;
+  currencyCode?: string;
+}
+
+export interface ProductOfferPriceAlteration {
+  name?: string;
+  description?: string;
+  validFor?: ValidFor;
+  priceType?: ProductOfferingPrice['priceType'];
+  unitOfMeasure?: string;
+  price?: PriceTaxIncluded;
+  recurringChargePeriod?: string;
 }
 
 export interface ProductOfferingPrice {
@@ -45,9 +101,27 @@ export interface ProductOfferingPrice {
   description?: string;
   priceType?: 'recurring' | 'usage' | 'one time' | 'tariff';
   recurringChargePeriod?: string;
-  unitOfMeasure?: Quantity;
-  price?: Money;
-  validFor?: { startDateTime?: Iso8601; endDateTime?: Iso8601 };
+  unitOfMeasure?: string;
+  price?: PriceTaxIncluded;
+  validFor?: ValidFor;
+  pricingLogicAlgorithm?: { href?: string }[];
+  productOfferPriceAlteration?: ProductOfferPriceAlteration;
+  prodSpecCharValueUse?: ProdSpecCharValueUse[];
+}
+
+export interface ProductOffering {
+  id: string;
+  href?: string;
+  name: string;
+  description?: string;
+  isBundle?: boolean;
+  lifecycleStatus?: LifecycleStatus;
+  validFor?: ValidFor;
+  productSpecification?: ProductSpecificationRef;
+  productOfferingPrice?: ProductOfferingPrice[];
+  category?: { id: string; name: string }[];
+  bundledProductOffering?: BundledProductOffering[];
+  prodSpecCharValueUse?: ProdSpecCharValueUse[];
 }
 
 export interface Service {
@@ -58,6 +132,13 @@ export interface Service {
   serviceCharacteristic?: Characteristic[];
   serviceRelationship?: { type: string; service: { id: string } }[];
   relatedParty?: RelatedParty[];
+  /**
+   * SigScale flattens the product association on Service to a plain ID string
+   * (or `productId` on older versions). Buckets are linked via this field —
+   * not via the service ID.
+   */
+  product?: string;
+  productId?: string;
 }
 
 export interface Product {
@@ -77,10 +158,13 @@ export interface Bucket {
   id: string;
   href?: string;
   name?: string;
-  amount?: Quantity;
+  /** Money paid for this bucket (top-up price). */
+  price?: PriceTaxIncluded;
+  /** Current remaining balance — initial amount is not exposed by the API. */
   remainedAmount?: Quantity;
   validFor?: { startDateTime?: Iso8601; endDateTime?: Iso8601 };
-  product?: { id: string };
+  product?: { id: string; href?: string };
+  lifecycleStatus?: string;
 }
 
 export interface Resource {

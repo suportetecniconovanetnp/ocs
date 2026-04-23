@@ -1,21 +1,31 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { useI18n } from 'vue-i18n';
+import { useRouter } from 'vue-router';
 import { subscribersApi } from '@/services';
 import { useAsyncResource } from '@/composables/useAsyncResource';
+import { useNotificationsStore } from '@/stores/notifications';
+import { useSafeT } from '@/composables/useSafeT';
+import SubscriberFormDialog from '@/components/SubscriberFormDialog.vue';
+import SubscriberTrafficDialog from '@/components/SubscriberTrafficDialog.vue';
+import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import type { Service } from '@/types/tmf';
 
-const { t } = useI18n();
+const { safeT } = useSafeT();
+const notifications = useNotificationsStore();
+const router = useRouter();
 
 const page = ref(1);
 const itemsPerPage = ref(25);
 const search = ref('');
 const expanded = ref<string[]>([]);
+const editing = ref<Service | null>(null);
+const formDialog = ref<InstanceType<typeof SubscriberFormDialog> | null>(null);
+const trafficDialog = ref<InstanceType<typeof SubscriberTrafficDialog> | null>(null);
+const confirmDialog = ref<InstanceType<typeof ConfirmDialog> | null>(null);
 
 const range = computed(() => {
   const start = (page.value - 1) * itemsPerPage.value;
-  const end = start + itemsPerPage.value - 1;
-  return { start, end };
+  return { start, end: start + itemsPerPage.value - 1 };
 });
 
 const subscribers = useAsyncResource(() =>
@@ -41,21 +51,71 @@ const headers = [
   { title: 'ID', key: 'id', sortable: false },
   { title: 'State', key: 'state' },
   { title: 'Enabled', key: 'isServiceEnabled' },
-  { title: 'Characteristics', key: 'serviceCharacteristic', sortable: false },
+  { title: 'Product', key: 'product', sortable: false },
+  { title: 'Password', key: 'password', sortable: false },
+  { title: 'Multi-session', key: 'multisession', sortable: false },
+  { title: 'Other', key: 'extras', sortable: false },
+  { title: '', key: 'actions', sortable: false, align: 'end' as const, width: 200 },
   { title: '', key: 'data-table-expand', width: 56 },
 ];
 
-function characteristicSummary(svc: Service): string {
-  const items = svc.serviceCharacteristic ?? [];
-  return items
-    .slice(0, 3)
-    .map((c) => `${c.name}=${String(c.value)}`)
-    .join(', ');
+// Characteristics surfaced as their own columns; everything else falls into "Other".
+const KNOWN_CHARS = new Set(['serviceIdentity', 'servicePassword', 'multisession']);
+
+function lookup(svc: Service, name: string): string | undefined {
+  const c = svc.serviceCharacteristic?.find((x) => x.name === name);
+  return c == null ? undefined : String(c.value);
 }
 
-function safeT(key: string, fallback: string): string {
-  const out = t(key);
-  return out === key ? fallback : out;
+function extras(svc: Service): { name: string; value: string }[] {
+  return (svc.serviceCharacteristic ?? [])
+    .filter((c) => !KNOWN_CHARS.has(c.name))
+    .map((c) => ({ name: c.name, value: String(c.value) }));
+}
+
+function productIdFromService(svc: Service): string | undefined {
+  // SigScale exposes the product link as a flat string on the Service
+  // (newer responses use `product`, legacy ones used `productId`).
+  return svc.product || svc.productId || undefined;
+}
+
+function viewBuckets(svc: Service) {
+  const productId = productIdFromService(svc);
+  if (!productId) {
+    notifications.warning('This subscriber has no associated product.');
+    return;
+  }
+  router.push({ name: 'buckets', query: { product: productId } });
+}
+
+// Traffic history: filter accounting logs by the subscriber's serviceIdentity
+// (falls back to the service id when not set in characteristics).
+function viewTraffic(svc: Service) {
+  const identity = lookup(svc, 'serviceIdentity') || svc.id;
+  trafficDialog.value?.show(identity);
+}
+
+
+function add() {
+  editing.value = null;
+  formDialog.value?.show();
+}
+
+function edit(svc: Service) {
+  editing.value = svc;
+  formDialog.value?.show();
+}
+
+async function remove(svc: Service) {
+  const ok = await confirmDialog.value?.ask();
+  if (!ok) return;
+  try {
+    await subscribersApi.delete(svc.id);
+    notifications.success('Subscriber deleted.');
+    void subscribers.reload();
+  } catch {
+    /* interceptor toasts */
+  }
 }
 </script>
 
@@ -64,7 +124,7 @@ function safeT(key: string, fallback: string): string {
     <div class="d-flex align-center mb-4">
       <h1 class="text-h5 font-weight-medium">{{ safeT('subs', 'Subscribers') }}</h1>
       <v-spacer />
-      <v-btn color="primary" prepend-icon="mdi-plus" disabled>
+      <v-btn color="primary" prepend-icon="mdi-plus" @click="add">
         {{ safeT('add', 'Add') }}
       </v-btn>
     </div>
@@ -101,8 +161,66 @@ function safeT(key: string, fallback: string): string {
               {{ item.state ?? '—' }}
             </v-chip>
           </template>
-          <template #item.serviceCharacteristic="{ item }">
-            <span class="text-caption">{{ characteristicSummary(item) }}</span>
+          <template #item.product="{ item }">
+            <code v-if="productIdFromService(item)" class="text-caption">
+              {{ productIdFromService(item) }}
+            </code>
+            <span v-else class="text-medium-emphasis">—</span>
+          </template>
+          <template #item.password="{ item }">
+            <code v-if="lookup(item, 'servicePassword')" class="text-caption">
+              {{ lookup(item, 'servicePassword') }}
+            </code>
+            <span v-else class="text-medium-emphasis">—</span>
+          </template>
+          <template #item.multisession="{ item }">
+            <v-icon
+              v-if="lookup(item, 'multisession') === 'true'"
+              icon="mdi-check-circle"
+              color="success"
+              size="small"
+            />
+            <v-icon
+              v-else-if="lookup(item, 'multisession') === 'false'"
+              icon="mdi-close-circle"
+              color="default"
+              size="small"
+            />
+            <span v-else class="text-medium-emphasis">—</span>
+          </template>
+          <template #item.extras="{ item }">
+            <div class="d-flex flex-wrap ga-1">
+              <v-chip
+                v-for="c in extras(item)"
+                :key="c.name"
+                size="x-small"
+                variant="tonal"
+                :title="`${c.name}: ${c.value}`"
+              >
+                <span class="text-caption font-weight-medium mr-1">{{ c.name }}</span>
+                <span class="text-caption">{{ c.value }}</span>
+              </v-chip>
+              <span v-if="!extras(item).length" class="text-medium-emphasis">—</span>
+            </div>
+          </template>
+          <template #item.actions="{ item }">
+            <v-btn
+              icon="mdi-chart-timeline-variant"
+              variant="text"
+              size="small"
+              title="Traffic history"
+              @click="viewTraffic(item)"
+            />
+            <v-btn
+              icon="mdi-wallet"
+              variant="text"
+              size="small"
+              :title="productIdFromService(item) ? 'View buckets' : 'No product associated'"
+              :disabled="!productIdFromService(item)"
+              @click="viewBuckets(item)"
+            />
+            <v-btn icon="mdi-pencil" variant="text" size="small" @click="edit(item)" />
+            <v-btn icon="mdi-delete" variant="text" size="small" color="error" @click="remove(item)" />
           </template>
           <template #expanded-row="{ columns, item }">
             <tr>
@@ -118,10 +236,7 @@ function safeT(key: string, fallback: string): string {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr
-                      v-for="c in item.serviceCharacteristic ?? []"
-                      :key="c.name"
-                    >
+                    <tr v-for="c in item.serviceCharacteristic ?? []" :key="c.name">
                       <td>{{ c.name }}</td>
                       <td><code>{{ String(c.value) }}</code></td>
                     </tr>
@@ -136,5 +251,14 @@ function safeT(key: string, fallback: string): string {
         </v-data-table-server>
       </v-card-text>
     </v-card>
+
+    <SubscriberFormDialog ref="formDialog" :subscriber="editing" @saved="subscribers.reload" />
+    <SubscriberTrafficDialog ref="trafficDialog" />
+    <ConfirmDialog
+      ref="confirmDialog"
+      title="Delete subscriber"
+      message="This will permanently remove the subscriber. Continue?"
+      confirm-text="Delete"
+    />
   </div>
 </template>

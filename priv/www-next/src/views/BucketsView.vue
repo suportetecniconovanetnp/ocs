@@ -1,20 +1,22 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { balanceApi } from '@/services';
 import { useAsyncResource } from '@/composables/useAsyncResource';
 import { useFormatters } from '@/composables/useFormatters';
 import { useNotificationsStore } from '@/stores/notifications';
 import TopupDialog from '@/components/TopupDialog.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
-import type { Bucket } from '@/types/tmf';
+import type { Bucket, Quantity } from '@/types/tmf';
 
+const route = useRoute();
 const page = ref(1);
 const itemsPerPage = ref(25);
-const filterProduct = ref('');
+const filterProduct = ref((route.query.product as string) ?? '');
 const topupDialog = ref<InstanceType<typeof TopupDialog> | null>(null);
 const confirmDialog = ref<InstanceType<typeof ConfirmDialog> | null>(null);
 const notifications = useNotificationsStore();
-const { date, bytes, number } = useFormatters();
+const { date, bytes, duration, number, money } = useFormatters();
 
 const range = computed(() => {
   const start = (page.value - 1) * itemsPerPage.value;
@@ -43,31 +45,58 @@ const headers = [
   { title: 'ID', key: 'id' },
   { title: 'Product', key: 'product' },
   { title: 'Units', key: 'units' },
-  { title: 'Amount', key: 'amount' },
-  { title: 'Remaining', key: 'remainedAmount' },
+  { title: 'Remaining', key: 'remaining' },
+  { title: 'Price', key: 'price' },
   { title: 'Valid from', key: 'validFrom' },
   { title: 'Valid to', key: 'validTo' },
   { title: '', key: 'actions', sortable: false, align: 'end' as const, width: 80 },
 ];
 
-function row(bucket: Bucket) {
-  const units = bucket.amount?.units;
-  const amt = bucket.amount?.amount;
-  const rem = bucket.remainedAmount?.amount;
-  const isBytes = units === 'octets';
-  return {
+/**
+ * SigScale buckets store amounts as strings with a unit suffix:
+ * `"1500b"` (octets), `"60s"` (seconds), `"10msg"` (messages),
+ * or a plain number for cents. Strip the suffix and return the raw number.
+ */
+function parseAmount(q: Quantity | undefined): number | undefined {
+  if (!q || q.amount == null) return undefined;
+  if (typeof q.amount === 'number') return q.amount;
+  const stripped = q.amount.replace(/(b|s|msg)$/i, '');
+  const n = Number(stripped);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function formatRemaining(q: Quantity | undefined): string {
+  const value = parseAmount(q);
+  if (value == null) return '—';
+  switch (q?.units) {
+    case 'cents':
+      return money(value / 100);
+    case 'octets':
+      return bytes(value);
+    case 'seconds':
+      return duration(value);
+    case 'messages':
+      return `${number(value)} msg`;
+    default:
+      return number(value);
+  }
+}
+
+const rows = computed(() =>
+  (buckets.data.value?.items ?? []).map((bucket) => ({
     id: bucket.id,
-    product: bucket.product?.id,
-    units: units ?? '—',
-    amount: isBytes ? bytes(amt) : number(amt ?? null),
-    remainedAmount: isBytes ? bytes(rem) : number(rem ?? null),
+    product: bucket.product?.id ?? '—',
+    units: bucket.remainedAmount?.units ?? '—',
+    remaining: formatRemaining(bucket.remainedAmount),
+    price:
+      bucket.price?.taxIncludedAmount != null
+        ? money(bucket.price.taxIncludedAmount, bucket.price.currencyCode)
+        : '—',
     validFrom: date(bucket.validFor?.startDateTime),
     validTo: date(bucket.validFor?.endDateTime),
     raw: bucket,
-  };
-}
-
-const rows = computed(() => (buckets.data.value?.items ?? []).map(row));
+  })),
+);
 
 async function remove(bucket: Bucket) {
   const ok = await confirmDialog.value?.ask();
@@ -110,6 +139,9 @@ async function remove(bucket: Bucket) {
           :loading="buckets.loading.value"
           density="comfortable"
         >
+          <template #item.units="{ item }">
+            <v-chip size="x-small">{{ item.units }}</v-chip>
+          </template>
           <template #item.actions="{ item }">
             <v-btn icon="mdi-delete" variant="text" size="small" color="error" @click="remove(item.raw)" />
           </template>

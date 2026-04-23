@@ -43,6 +43,12 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'catalog', icon: 'mdi-tag-multiple' },
       },
       {
+        path: 'catalog/:id',
+        name: 'offering-detail',
+        component: () => import('@/views/OfferingDetailView.vue'),
+        meta: { titleKey: 'catalog' },
+      },
+      {
         path: 'buckets',
         name: 'buckets',
         component: () => import('@/views/BucketsView.vue'),

@@ -34,6 +34,15 @@ const headers = [
   { title: '', key: 'actions', sortable: false, align: 'end' as const, width: 120 },
 ];
 
+// SigScale stores the NAS address in `id` (see sig-client-add legacy).
+// Some deployments also populate `identifier` explicitly — fall back to id.
+const rows = computed(() =>
+  (clients.data.value?.items ?? []).map((c) => ({
+    ...c,
+    identifier: c.identifier || c.id,
+  })),
+);
+
 function add() {
   editing.value = null;
   formDialog.value?.show();
@@ -70,7 +79,7 @@ async function remove(client: Client) {
         <v-data-table-server
           v-model:items-per-page="itemsPerPage"
           v-model:page="page"
-          :items="clients.data.value?.items ?? []"
+          :items="rows"
           :items-length="total"
           :headers="headers"
           :loading="clients.loading.value"

@@ -36,6 +36,17 @@ export function useFormatters() {
   function duration(seconds: number | undefined | null): string {
     if (seconds == null || !Number.isFinite(seconds)) return '—';
     if (seconds < 1) return '0s';
+    // Defensive: SigScale OCS sometimes mis-populates `acctSessionTime` with the
+    // Event-Timestamp (Unix epoch seconds) when the source packet doesn't carry
+    // a real Acct-Session-Time AVP — typical of `start` and the first `interim`
+    // of a session. RFC 2866 / 3GPP 32.299 / RFC 4006 all define session-time
+    // strictly as elapsed seconds, so any value larger than ~10 years cannot be
+    // a real duration. Fall back to displaying it as a timestamp.
+    const TEN_YEARS_SECONDS = 10 * 365 * 86_400; // ~315M
+    if (seconds > TEN_YEARS_SECONDS) {
+      const d = new Date(seconds * 1000);
+      if (!Number.isNaN(d.getTime())) return `(ts) ${d.toLocaleString(locale.value)}`;
+    }
     let remaining = Math.floor(seconds);
     const parts: string[] = [];
     for (const { unit, label } of SECONDS_UNITS) {
