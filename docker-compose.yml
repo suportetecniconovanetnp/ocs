@@ -1,29 +1,29 @@
+# Production-style compose using a prebuilt image and host bind mounts.
+# Copy `.env.example` to `.env` first; every value below interpolates from it
+# (with sensible defaults if the variable is unset).
+#
+# Logs (including IPDR exports) land directly under ${OCS_DATA_DIR}/log/...
+# on the host, so you can `tail -f`, archive, or ship them to ELK without
+# having to `docker exec` into the container.
 services:
   ocs:
-    image: sigscale-ocs-local:teste
-    hostname: ocs
+    image: ${OCS_IMAGE:-sigscale-ocs-local:latest}
+    hostname: ${OCS_HOSTNAME:-ocs}
+    restart: unless-stopped
+    env_file:
+      - .env
     ports:
-      - "127.0.0.251:8080:8080/tcp"
-      - "127.0.0.251:1812:1812/udp"
-      - "127.0.0.251:1813:1813/udp"
-      - "127.0.0.251:3868:3868/tcp"
-      - "127.0.0.251:3869:3869/tcp"
-    environment:
-      OCS_INIT_DB: "true"
-      OCS_NODENAME: "ocs"
-      OCS_DEBUG: "true"
-      OCS_SYS_CONFIG: "/run/config/ocs/sys.config"
+      - "${OCS_BIND_HOST:-127.0.0.1}:${OCS_HTTP_PORT_HOST:-8080}:${OCS_HTTP_PORT:-8080}/tcp"
+      - "${OCS_BIND_HOST:-127.0.0.1}:${OCS_RADIUS_AUTH_PORT_HOST:-1812}:${OCS_RADIUS_AUTH_PORT:-1812}/udp"
+      - "${OCS_BIND_HOST:-127.0.0.1}:${OCS_RADIUS_ACCT_PORT_HOST:-1813}:${OCS_RADIUS_ACCT_PORT:-1813}/udp"
+      - "${OCS_BIND_HOST:-127.0.0.1}:${OCS_DIAMETER_ACCT_PORT_HOST:-3868}:${OCS_DIAMETER_ACCT_PORT:-3868}/tcp"
+      - "${OCS_BIND_HOST:-127.0.0.1}:${OCS_DIAMETER_AUTH_PORT_HOST:-3869}:${OCS_DIAMETER_AUTH_PORT:-3869}/tcp"
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - /etc/timezone:/etc/timezone:ro
-      - ocs-db:/home/otp/db
-      - ocs-log:/home/otp/log
-      - ocs-ssl:/home/otp/ssl
-      - ocs-snmp:/home/otp/snmp
-      - /opt/ocs/sys.config:/run/config/ocs/sys.config:ro
-
-volumes:
-  ocs-db:
-  ocs-log:
-  ocs-ssl:
-  ocs-snmp:
+      # Bind mounts so logs / DB / certs are directly inspectable on the host.
+      # ${OCS_DATA_DIR} defaults to ./data — create it before `docker compose up`.
+      - ${OCS_DATA_DIR:-./data}/db:/home/otp/db
+      - ${OCS_DATA_DIR:-./data}/log:/home/otp/log
+      - ${OCS_DATA_DIR:-./data}/ssl:/home/otp/ssl
+      - ${OCS_DATA_DIR:-./data}/snmp:/home/otp/snmp
