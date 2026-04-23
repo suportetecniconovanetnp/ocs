@@ -53,6 +53,92 @@ defaults):
 Tipos com sintaxe Erlang (ex. tuplas) precisam vir formatados — por exemplo
 `OCS_ACCT_LOG_ROTATE_TIME={4,4,4}`, `OCS_EXPLICIT_RESERVE_OCTETS=undefined`.
 
+## Exemplo: Portainer (stack inline)
+
+O Portainer funciona melhor com todas as variáveis **declaradas no próprio
+compose** — a UI dele renderiza tudo num único formulário editável. Evite
+`env_file:` no Portainer (caminhos relativos do `.env` não são resolvidos de
+forma confiável).
+
+### Preparação do host
+
+```bash
+sudo mkdir -p /opt/ocs/data/{db,log,ssl,snmp}
+sudo chown -R 1000:1000 /opt/ocs/data
+```
+
+### Stack
+
+```yaml
+services:
+  ocs:
+    image: sigscale-ocs-local:v3.4.59-bugfix-claude
+    restart: unless-stopped
+    hostname: ocs
+    ports:
+      - "127.0.0.251:8080:8080/tcp"
+      - "127.0.0.251:1812:1812/udp"
+      - "127.0.0.251:1813:1813/udp"
+      - "127.0.0.251:3868:3868/tcp"
+      - "127.0.0.251:3869:3869/tcp"
+    environment:
+      # Bootstrap
+      OCS_INIT_DB: "true"
+      OCS_NODENAME: "ocs"
+      OCS_DEBUG: "true"
+      TZ: America/Belem
+
+      # Diameter Gy/Ro (Origin/Realm)
+      OCS_DIAMETER_ACCT_PORT: "3868"
+      OCS_DIAMETER_AUTH_PORT: "3869"
+      OCS_DIAMETER_ORIGIN_HOST: "ocs.localdomain"
+      OCS_DIAMETER_ORIGIN_REALM: "localdomain"
+
+      # RADIUS
+      OCS_RADIUS_AUTH_PORT: "1812"
+      OCS_RADIUS_ACCT_PORT: "1813"
+
+      # HTTP / REST
+      OCS_HTTP_PORT: "8080"
+      OCS_HTTP_TLS: "false"
+      OCS_HTTP_AUTH_REQUIRE_GROUP: "staff"
+
+      # Política de reserva (substitui sys.config customizado)
+      OCS_EXPLICIT_RESERVE_POLICY: "fixed"
+      OCS_EXPLICIT_RESERVE_OCTETS: "10000000"
+      OCS_EXPLICIT_RESERVE_SECONDS: "undefined"
+      OCS_EXPLICIT_RESERVE_MESSAGES: "undefined"
+      OCS_MIN_RESERVE_OCTETS: "10000000"
+      OCS_MIN_RESERVE_SECONDS: "60"
+      OCS_MIN_RESERVE_MESSAGES: "1"
+      OCS_MAX_RESERVE_OCTETS: "undefined"
+      OCS_MAX_RESERVE_SECONDS: "undefined"
+      OCS_MAX_RESERVE_MESSAGES: "undefined"
+      OCS_SESSION_DEBUG_LOGS: "true"
+
+      # Rotação de log
+      OCS_ACCT_LOG_ROTATE_MIN: "1440"
+      OCS_ACCT_LOG_ROTATE_TIME: "{4,4,4}"
+
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+      - /opt/ocs/data/db:/home/otp/db
+      - /opt/ocs/data/log:/home/otp/log
+      - /opt/ocs/data/ssl:/home/otp/ssl
+      - /opt/ocs/data/snmp:/home/otp/snmp
+```
+
+### Dicas Portainer
+
+- Para editar uma variável depois de subir o stack: **Stacks → ocs →
+  Editor**, muda o valor, **Update the stack**. Não precisa rebuild.
+- Para ver o `sys.config` efetivo que o entrypoint gerou, mantenha
+  `OCS_DEBUG=true` e olhe em **Containers → ocs → Logs** — o arquivo é
+  dumpado com numeração de linhas logo após a bootstrap.
+- Logs IPDR ficam em `/opt/ocs/data/log/ipdr/` no host (acessíveis pelo
+  file browser do Portainer em **Hosts → Volumes** ou via `ssh`).
+
 ## Override avançado: sys.config próprio
 
 Quando precisar de chaves não expostas pelo renderer, monte um `sys.config`
