@@ -25,3 +25,7 @@ ltmain.sh
 # web component generated with version number
 priv/www/src/sig-help.js
 
+# Local docker runtime: env file with secrets and the bind-mount data tree
+.env
+data/
+

@@ -1,27 +1,24 @@
+# Development compose: builds the image locally from this tree.
+# For deploys with a prebuilt image use the top-level docker-compose.yml.
+# Both files honour the same .env (look in repo root for .env.example).
 services:
   ocs:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: sigscale-ocs-local:latest
-    hostname: ocs
+    image: ${OCS_IMAGE:-sigscale-ocs-local:latest}
+    hostname: ${OCS_HOSTNAME:-ocs}
+    restart: unless-stopped
+    env_file:
+      - ../.env
     ports:
-      - "8080:8080/tcp"
-      - "1812:1812/udp"
-      - "1813:1813/udp"
-      - "3868:3868/tcp"
-      - "3869:3869/tcp"
-    environment:
-      OCS_INIT_DB: "true"
-      OCS_NODENAME: "ocs"
+      - "${OCS_BIND_HOST:-0.0.0.0}:${OCS_HTTP_PORT_HOST:-8080}:${OCS_HTTP_PORT:-8080}/tcp"
+      - "${OCS_BIND_HOST:-0.0.0.0}:${OCS_RADIUS_AUTH_PORT_HOST:-1812}:${OCS_RADIUS_AUTH_PORT:-1812}/udp"
+      - "${OCS_BIND_HOST:-0.0.0.0}:${OCS_RADIUS_ACCT_PORT_HOST:-1813}:${OCS_RADIUS_ACCT_PORT:-1813}/udp"
+      - "${OCS_BIND_HOST:-0.0.0.0}:${OCS_DIAMETER_ACCT_PORT_HOST:-3868}:${OCS_DIAMETER_ACCT_PORT:-3868}/tcp"
+      - "${OCS_BIND_HOST:-0.0.0.0}:${OCS_DIAMETER_AUTH_PORT_HOST:-3869}:${OCS_DIAMETER_AUTH_PORT:-3869}/tcp"
     volumes:
-      - ocs-db:/home/otp/db
-      - ocs-log:/home/otp/log
-      - ocs-ssl:/home/otp/ssl
-      - ocs-snmp:/home/otp/snmp
-
-volumes:
-  ocs-db:
-  ocs-log:
-  ocs-ssl:
-  ocs-snmp:
+      - ${OCS_DATA_DIR:-../data}/db:/home/otp/db
+      - ${OCS_DATA_DIR:-../data}/log:/home/otp/log
+      - ${OCS_DATA_DIR:-../data}/ssl:/home/otp/ssl
+      - ${OCS_DATA_DIR:-../data}/snmp:/home/otp/snmp

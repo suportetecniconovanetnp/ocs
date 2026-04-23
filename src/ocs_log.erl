@@ -609,7 +609,11 @@ cdr_log(chf = Type, File, Start, End) when is_list(File),
 		is_integer(Start), is_integer(End) ->
 		{ok, Directory} = application:get_env(ocs, cdr_log_dir),
 		FileName = filename:join([Directory, Type, File]),
-	case disk_log:open([{name, File},
+	% Use make_ref/0 as the disk_log registry key to avoid
+	% `name_already_open` when two rotate timers fire in the same
+	% millisecond (the File string is a shared iso8601 timestamp that
+	% previously clashed across concurrent chf/ipdr rotations).
+	case disk_log:open([{name, make_ref()},
 			{file, FileName}, {repair, truncate}]) of
 		{ok, CdrLog} ->
 			{ok, AcctLog} = application:get_env(ocs, acct_log_name),
@@ -825,7 +829,10 @@ ipdr_log(Type, File, Start, End) when is_list(File),
 		is_integer(Start), is_integer(End) ->
 		{ok, Directory} = application:get_env(ocs, ipdr_log_dir),
 		FileName = filename:join([Directory, Type, File]),
-	case disk_log:open([{name, File}, {file, FileName}, {repair, truncate}]) of
+	% See cdr_log/4 — avoid `name_already_open` when wlan and voip IPDR
+	% rotations fire in the same millisecond by using a unique ref
+	% instead of the shared iso8601 filename as the disk_log registry key.
+	case disk_log:open([{name, make_ref()}, {file, FileName}, {repair, truncate}]) of
 		{ok, IpdrLog} ->
 			IpdrDoc = case Type of
 				wlan ->
