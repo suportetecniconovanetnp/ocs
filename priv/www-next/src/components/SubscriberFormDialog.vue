@@ -5,6 +5,7 @@ import {
   buildServicePayload,
   buildProductPayload,
   buildCreditQuantity,
+  buildCreditValidFor,
   emptySubscriberForm,
   parseSubscriber,
   LIFECYCLE_STATES,
@@ -116,7 +117,7 @@ async function save() {
         );
       } else if (quantity && productId) {
         try {
-          await balanceApi.adjustment(productId, quantity);
+          await balanceApi.adjustment(productId, quantity, buildCreditValidFor(form.value.credit));
           notifications.success(`Applied ${form.value.credit.amount} ${form.value.credit.units}.`);
         } catch {
           notifications.warning(
@@ -193,7 +194,7 @@ async function save() {
         );
       } else if (quantity && productId) {
         try {
-          await balanceApi.adjustment(productId, quantity);
+          await balanceApi.adjustment(productId, quantity, buildCreditValidFor(form.value.credit));
         } catch {
           notifications.warning(
             `Subscriber "${result.id}" and product "${productId}" created, but applying the initial credit failed. Add it manually from the Buckets view.`,
@@ -400,6 +401,31 @@ defineExpose({ show });
                   { title: 'Seconds', value: 'seconds' },
                 ]"
                 label="Units"
+              />
+            </div>
+
+            <v-divider class="mb-3" />
+            <div class="text-subtitle-2 mb-1">Bucket validity (optional)</div>
+            <div class="text-caption text-medium-emphasis mb-3">
+              Limits how long this credit is honoured. Leave both empty for an
+              unlimited bucket — that is the legacy default.
+            </div>
+            <div class="d-flex ga-3">
+              <v-text-field
+                v-model="form.credit.validFrom"
+                type="datetime-local"
+                label="Valid from"
+                hint="Blank = starts immediately."
+                persistent-hint
+                clearable
+              />
+              <v-text-field
+                v-model="form.credit.validTo"
+                type="datetime-local"
+                label="Valid to"
+                hint="Blank = never expires."
+                persistent-hint
+                clearable
               />
             </div>
           </v-tabs-window-item>

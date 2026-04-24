@@ -52,6 +52,9 @@ export interface SubscriberFormCredit {
   /** Raw user input — "500", "1g", "2m", "30s". */
   amount: string;
   units: BalanceUnit;
+  /** Optional bucket validity (datetime-local strings, "" for unset). */
+  validFrom: string;
+  validTo: string;
 }
 
 export interface SubscriberForm {
@@ -92,8 +95,43 @@ export function emptySubscriberForm(): SubscriberForm {
     credit: {
       amount: '',
       units: 'cents',
+      validFrom: '',
+      validTo: '',
     },
   };
+}
+
+/**
+ * Convert the form's local datetime strings into the optional `validFor`
+ * payload accepted by `balanceApi.topup`/`adjustment`.
+ *
+ * IMPORTANT: SigScale's `ocs_rest:iso8601/1` parser is wall-clock and
+ * does NOT accept the `Z` UTC designator (it tokenises on `:`/`.` and
+ * feeds each piece to `list_to_integer/1`, so `"...000Z"` blows up with
+ * `badarg`, surfaced as `400 "Exception occurred parsing request body"`).
+ * The legacy Polymer UI worked because it sent the raw `YYYY-MM-DDTHH:MM`
+ * string from `<input type="datetime-local">`. We do the same here.
+ *
+ * Returns undefined when neither field is set, matching the
+ * "no validity = unlimited" backend default.
+ */
+export function buildCreditValidFor(
+  credit: SubscriberFormCredit,
+): { startDateTime?: string; endDateTime?: string } | undefined {
+  const start = sanitizeBackendDate(credit.validFrom);
+  const end = sanitizeBackendDate(credit.validTo);
+  if (!start && !end) return undefined;
+  return {
+    ...(start && { startDateTime: start }),
+    ...(end && { endDateTime: end }),
+  };
+}
+
+function sanitizeBackendDate(local: string): string | undefined {
+  if (!local) return undefined;
+  const d = new Date(local);
+  if (Number.isNaN(d.getTime())) return undefined;
+  return local.endsWith('Z') ? local.slice(0, -1) : local;
 }
 
 /* ------------------------------------------------------------------ *
@@ -279,6 +317,8 @@ export function parseSubscriber(svc: Service): SubscriberForm {
     credit: {
       amount: '',
       units: 'cents',
+      validFrom: '',
+      validTo: '',
     },
   };
 }
