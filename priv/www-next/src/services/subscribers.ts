@@ -43,6 +43,28 @@ export const subscribersApi = {
       })
       .then((r) => r.data);
   },
+  /**
+   * Swap (or detach) the subscriber's product reference. Uses JSON-Patch
+   * against the service resource — the backend handler at
+   * `ocs_rest_res_service.erl:237-277` atomically updates both the old
+   * product's `realizingService` (removing this service) AND the new
+   * product's `realizingService` (appending it) in a single mnesia
+   * transaction. This is the same call the legacy Polymer UI
+   * (`priv/www/src/sig-sub-update.js:840-852`) made.
+   *
+   * Pass `undefined`/empty string to DETACH the subscriber from any
+   * product (emits `{op: "remove", path: "/product"}`).
+   */
+  patchProduct(id: string, newProductId: string | undefined): Promise<Service> {
+    const ops = newProductId
+      ? [{ op: 'add', path: '/product', value: newProductId }]
+      : [{ op: 'remove', path: '/product' }];
+    return http
+      .patch<Service>(`${BASE}/service/${enc(id)}`, ops, {
+        headers: { 'Content-Type': 'application/json-patch+json' },
+      })
+      .then((r) => r.data);
+  },
   delete(id: string): Promise<void> {
     return http.delete(`${BASE}/service/${enc(id)}`).then(() => undefined);
   },

@@ -23,11 +23,22 @@ export const LIFECYCLE_STATES = [
 export interface SubscriberFormProduct {
   /** Picked from the "Product Offering" dropdown (new product will be created). */
   offeringId: string;
-  /** Typed directly when reusing an existing product (skips product creation). */
+  /**
+   * When creating: typed directly to reuse an existing product (skips product creation).
+   * When editing:  populated from the "Change product" dropdown; the JSON-Patch swap
+   *                on save migrates the service to this product.
+   */
   existingProductId: string;
   lifecycleLabel: string;
   startDate: string;
   endDate: string;
+  /* ---- Edit-mode only (ignored when creating) ---- */
+  /** Read-only snapshot of the product the service is currently bound to. */
+  currentProductId: string;
+  /** User flipped the "Change product" toggle. */
+  switchProduct: boolean;
+  /** After swap, delete the old product if no realizingService remains. */
+  deleteOrphanIfEmpty: boolean;
 }
 
 export interface SubscriberFormAuth {
@@ -76,6 +87,9 @@ export function emptySubscriberForm(): SubscriberForm {
       lifecycleLabel: 'Active',
       startDate: '',
       endDate: '',
+      currentProductId: '',
+      switchProduct: false,
+      deleteOrphanIfEmpty: true,
     },
     auth: {
       identity: '',
@@ -287,6 +301,14 @@ function stateToLabel(state: Service['state'] | undefined): string {
   return match?.label ?? 'Active';
 }
 
+function isoLocal(value: string | undefined): string {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function parseSubscriber(svc: Service): SubscriberForm {
   const chars = svc.serviceCharacteristic;
   const intervalRaw = lookup(chars, 'acctSessionInterval');
@@ -294,10 +316,13 @@ export function parseSubscriber(svc: Service): SubscriberForm {
   return {
     product: {
       offeringId: '',
-      existingProductId: svc.product ?? svc.productId ?? '',
+      existingProductId: '',
       lifecycleLabel: stateToLabel(svc.state),
       startDate: '',
       endDate: '',
+      currentProductId: svc.product ?? svc.productId ?? '',
+      switchProduct: false,
+      deleteOrphanIfEmpty: true,
     },
     auth: {
       identity: String(lookup(chars, 'serviceIdentity') ?? svc.id ?? ''),
