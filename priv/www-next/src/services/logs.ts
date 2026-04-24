@@ -1,8 +1,9 @@
 import { getList, rangeHeader, type PagedResult } from './http';
-import type { Usage } from '@/types/tmf';
+import type { AbmfEvent, Usage } from '@/types/tmf';
 
 const USAGE_BASE = '/usageManagement/v1/usage';
 const HTTP_LOG = '/ocs/v1/log/http';
+const ABMF_LOG = '/ocs/v1/log/balance';
 
 export interface UsageQuery {
   /**
@@ -87,6 +88,35 @@ export function matchesAnyIdentity(usage: Usage, value: string): boolean {
   return false;
 }
 
+/**
+ * Vaadin-style filter expression builder for the ABMF log. Mirrors the
+ * legacy `sig-balance-list.js` `_getBalances` filter composition: joins
+ * multiple `path.like=[value]` clauses inside a single `[{...}]` array.
+ *
+ * Only path/value pairs with a non-empty value are emitted; passing an
+ * empty object returns `undefined` so callers can drop the `filter`
+ * param entirely instead of sending an empty expression the backend
+ * would 400 on.
+ */
+function buildAbmfFilter(paths: Partial<Record<'type' | 'subscriber' | 'bucket' | 'units' | 'product', string>>): string | undefined {
+  const clauses: string[] = [];
+  for (const [path, value] of Object.entries(paths)) {
+    if (value) clauses.push(`${path}.like=[${value}`);
+  }
+  if (clauses.length === 0) return undefined;
+  return `"[{${clauses.join('],')}]}]"`;
+}
+
+export interface AbmfQuery {
+  /** ISO date prefix (YYYY-MM-DD or fuller). Sent as the `date` query param. */
+  date?: string;
+  type?: string;
+  subscriber?: string;
+  bucket?: string;
+  units?: string;
+  product?: string;
+}
+
 export const logsApi = {
   access(start = 0, end = 99, query?: UsageQuery): Promise<PagedResult<Usage>> {
     return getList<Usage>(USAGE_BASE, {
@@ -98,6 +128,30 @@ export const logsApi = {
     return getList<Usage>(USAGE_BASE, {
       headers: rangeHeader(start, end),
       params: buildParams('AAAAccountingUsage', query),
+    });
+  },
+  /**
+   * Balance-management audit log. One record per top-up / adjustment /
+   * reserve / debit / transfer event emitted by the ABMF. Filters mirror
+   * the server-side allowlist in `ocs_rest_res_balance:get_balance_log/2`
+   * (date, type, subscriber, bucket, units, product).
+   */
+  abmf(start = 0, end = 99, query?: AbmfQuery): Promise<PagedResult<AbmfEvent>> {
+    const params: Record<string, string> = {};
+    if (query?.date) params['date'] = query.date;
+    const filter = query
+      ? buildAbmfFilter({
+          type: query.type,
+          subscriber: query.subscriber,
+          bucket: query.bucket,
+          units: query.units,
+          product: query.product,
+        })
+      : undefined;
+    if (filter) params['filter'] = filter;
+    return getList<AbmfEvent>(ABMF_LOG, {
+      headers: rangeHeader(start, end),
+      params,
     });
   },
   http(start = 0, end = 99): Promise<PagedResult<unknown>> {
