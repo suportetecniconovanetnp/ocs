@@ -44,6 +44,7 @@ defaults):
 | Diameter | `OCS_DIAMETER_ACCT_PORT`, `OCS_DIAMETER_AUTH_PORT`, `OCS_DIAMETER_ORIGIN_HOST`, `OCS_DIAMETER_ORIGIN_REALM` |
 | HTTP | `OCS_HTTP_PORT`, `OCS_HTTP_TLS`, `OCS_HTTP_AUTH_REQUIRE_GROUP`, `OCS_HTTP_LOG_SIZE_BYTES`, `OCS_HTTP_LOG_FILE_COUNT` |
 | Logs | `OCS_{ACCT,AUTH,ABMF,IPDR,HTTP}_LOG_DIR`, `OCS_EXPORT_DIR`, `OCS_ACCT_LOG_ROTATE_MIN`, `OCS_ACCT_LOG_ROTATE_TIME` |
+| Retenção de log | `OCS_{ACCT,AUTH,ABMF}_LOG_SIZE_BYTES`, `OCS_{ACCT,AUTH,ABMF}_LOG_FILE_COUNT` |
 | TLS | `OCS_TLS_KEY`, `OCS_TLS_CERT`, `OCS_TLS_CACERT` |
 | Mnesia / SNMP | `OCS_MNESIA_DIR`, `OCS_SNMP_CONF_DIR`, `OCS_SNMP_DB_DIR` |
 | Charging | `OCS_MIN_RESERVE_*`, `OCS_EXPLICIT_RESERVE_*`, `OCS_MAX_RESERVE_*`, `OCS_SESSION_DEBUG_LOGS` |
@@ -119,6 +120,16 @@ services:
       # Rotação de log
       OCS_ACCT_LOG_ROTATE_MIN: "1440"
       OCS_ACCT_LOG_ROTATE_TIME: "{4,4,4}"
+
+      # Retenção de log (FIFO wrap log: SIZE_BYTES * FILE_COUNT por log).
+      # Aumente FILE_COUNT para manter mais eventos consultáveis pela UI/REST.
+      # Defaults upstream: 10 MiB × 100 = ~1 GiB por log.
+      OCS_ACCT_LOG_SIZE_BYTES: "10485760"
+      OCS_ACCT_LOG_FILE_COUNT: "100"
+      OCS_AUTH_LOG_SIZE_BYTES: "10485760"
+      OCS_AUTH_LOG_FILE_COUNT: "100"
+      OCS_ABMF_LOG_SIZE_BYTES: "10485760"
+      OCS_ABMF_LOG_FILE_COUNT: "100"
 
     volumes:
       - /etc/localtime:/etc/localtime:ro
