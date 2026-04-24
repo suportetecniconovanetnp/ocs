@@ -256,6 +256,49 @@ export function characteristicNumber(usage: Usage, name: string): number | undef
   return Number.isFinite(n) ? n : undefined;
 }
 
+/**
+ * HTTP access log record, as emitted by `ocs_rest_res_http:get_http/0`.
+ * The backend parses Apache Common Log Format entries from the inets
+ * `transfer_disk_log` — `datetime` arrives as `"DD/Mon/YYYY:HH:MM:SS +ZZZZ"`,
+ * NOT ISO-8601, so formatters must accept that shape.
+ */
+export interface HttpEvent {
+  datetime?: string;
+  host?: string;
+  user?: string;
+  method?: string;
+  uri?: string;
+  httpStatus?: number;
+}
+
+/**
+ * ABMF (Account Balance Management Function) log record.
+ *
+ * Shape per SigScale `ocs_rest_res_balance:abmf/1` codec. Consumed by the
+ * `/logs/balance` view. Field names mirror the legacy `sig-balance-list.js`
+ * expectations — upstream renamed `timeStamp` to `date` in commit c69e825b
+ * (Nov 2024), so our type uses the new name.
+ */
+export interface AbmfEvent {
+  date: Iso8601;
+  /**
+   * One of: `topup`, `adjustment`, `deduct`, `reserve`, `unreserve`,
+   * `transfer`, `delete`. Other atoms may appear on newer deployments —
+   * kept as a wide string for forward-compat.
+   */
+  type?: string;
+  subscriber?: { id: string };
+  /** The bucket whose balance was affected. */
+  bucketBalance?: { id: string; href?: string };
+  /** Delta applied by this event (signed on the backend side). */
+  amount?: Quantity;
+  /** Bucket's remain_amount immediately before the event. */
+  amountBefore?: Quantity;
+  /** Bucket's remain_amount immediately after the event. */
+  amountAfter?: Quantity;
+  product?: { id: string; href?: string };
+}
+
 export interface DashboardStats {
   subscriberCount?: number;
   activeSessions?: number;

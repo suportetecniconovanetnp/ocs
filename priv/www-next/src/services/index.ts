@@ -9,6 +9,7 @@ export {
   matchesAnyIdentity,
   SUBSCRIBER_ID_CHARS,
   type UsageQuery,
+  type AbmfQuery,
 } from './logs';
 export { usersApi, type OcsUser, type UserFormInput } from './users';
 export { productsApi } from './products';

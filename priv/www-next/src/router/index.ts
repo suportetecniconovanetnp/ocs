@@ -73,6 +73,18 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'accounting', icon: 'mdi-receipt-text' },
       },
       {
+        path: 'logs/balance',
+        name: 'logs-balance',
+        component: () => import('@/views/LogsAbmfView.vue'),
+        meta: { titleKey: 'balanceLog', icon: 'mdi-cash-register' },
+      },
+      {
+        path: 'logs/http',
+        name: 'logs-http',
+        component: () => import('@/views/LogsHttpView.vue'),
+        meta: { titleKey: 'httpLog', icon: 'mdi-web' },
+      },
+      {
         path: 'tariffs/rate',
         name: 'tariffs-rate',
         component: () => import('@/views/PlaceholderView.vue'),
