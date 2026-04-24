@@ -59,7 +59,7 @@
 -export([ipdr_log/4, ipdr_file/3]).
 
 %% export the private API
--export([acct_query/4, auth_query/5, abmf_query/6]).
+-export([acct_query/4, auth_query/5, abmf_query/6, ipdr_query/5]).
 -export([btree_search/2]).
 
 -include("ocs_log.hrl").
@@ -784,6 +784,54 @@ cdr_file3(_Log, _IoDevice, json, {_Cont,_Events}) ->
 	 {error, unimplemented};
 cdr_file3(Log, IoDevice, csv, {Cont, Events}) ->
 	chf_csv(Log, IoDevice, $,, {Cont, Events}).
+
+-spec ipdr_query(Continuation, Log, Start, End, AttrsMatch) -> Result
+	when
+		Continuation :: start | disk_log:continuation(),
+		Log :: atom() | tuple(),
+		Start :: calendar:datetime() | timestamp(),
+		End :: calendar:datetime() | timestamp(),
+		AttrsMatch :: [{Attribute, Match}] | '_',
+		Attribute :: byte(),
+		Match :: {exact, term()} | {notexact, term()}
+				| {lt, term()} | {lte, term()}
+				| {gt, term()} | {gte, term()}
+				| {regex, term()} | {like, [term()]} | {notlike, [term()]}
+				| {in, [term()]} | {notin, [term()]} | {contains, [term()]}
+				| {notcontain, [term()]} | {containsall, [term()]} | '_',
+		Result :: {Continuation2, Events},
+		Continuation2 :: eof | disk_log:continuation(),
+		Events :: [acct_event()].
+%% @doc Stream the next chunk of IPDR records from `Log'.
+%%
+%% Callback registered with the pagination server
+%% ({@link //ocs/ocs_rest_pagination_server. ocs_rest_pagination_server})
+%% by {@link //ocs/ocs_rest_res_usage:get_usages/4. ocs_rest_res_usage:get_usages/4}
+%% when serving `GET /usageManagement/v1/usage/ipdr/{wlan|voip}/{file}'.
+%%
+%% This module's matching `/2' helper was removed upstream in commit
+%% b62a5999 ("remove unused ipdr_query/2,5 functions"), but the removal
+%% was overeager — this `/5' arity is still invoked indirectly by
+%% `ocs_rest_res_usage.erl:3153'
+%% (`MFA = [ocs_log, ipdr_query, Args]' passed to the pagination
+%% supervisor, which does `apply(Module, Function, [Cont | Args])',
+%% yielding `ipdr_query(Cont, {Log, _}, Start, End, Chars)`). Without
+%% this function every IPDR file read crashes with `undef`, which the
+%% REST handler surfaces as
+%% `500 "Exception caught while calling the pagination server"`.
+%%
+%% Restoring just the chunking stub (matches the upstream implementation
+%% prior to b62a5999). The `_Start`/`_End`/`_AttrsMatch` filters are
+%% intentionally unused — the IPDR file is already scoped to a single
+%% rotation window and filtering happens at the REST codec level.
+%% @private
+ipdr_query(Continuation, Log, _Start, _End, _AttrsMatch) ->
+	case disk_log:chunk(Log, Continuation) of
+		eof ->
+			{eof, []};
+		{Continuation1, Events} ->
+			{Continuation1, Events}
+	end.
 
 -spec ipdr_log(Type, File, Start, End) -> Result
 	when
