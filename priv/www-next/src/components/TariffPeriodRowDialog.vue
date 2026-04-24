@@ -40,15 +40,35 @@ function show(row?: Resource) {
   open.value = true;
 }
 
+/**
+ * Parse the period-seconds fields as integers. SigScale
+ * (ocs.erl:1937-1943 and :1952-1957) pattern-matches `is_integer'
+ * strictly on periodInitial and periodAdditional — so they must
+ * arrive in the JSON as unquoted numbers, never strings, or the
+ * decoder throws `missing_char' which surfaces as
+ * 400 "A mandatory resource characteristic was missing".
+ *
+ * rateInitial / rateAdditional are tolerant (is_list | is_integer
+ * | is_float) and we keep sending them as strings so decimals like
+ * "0.05" survive without floating-point surprises.
+ */
+function asInt(raw: string): number | undefined {
+  const trimmed = raw.trim();
+  if (trimmed === '') return undefined;
+  const n = Number.parseInt(trimmed, 10);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 function submit() {
-  const entries: Characteristic[] = [
-    { name: 'prefix', value: prefix.value.trim() },
-    { name: 'description', value: description.value.trim() },
-    { name: 'periodInitial', value: periodInitial.value.trim() },
-    { name: 'rateInitial', value: rateInitial.value.trim() },
-    { name: 'periodAdditional', value: periodAdditional.value.trim() },
-    { name: 'rateAdditional', value: rateAdditional.value.trim() },
-  ].filter((c) => c.value !== '');
+  const entries: Characteristic[] = [];
+  if (prefix.value.trim()) entries.push({ name: 'prefix', value: prefix.value.trim() });
+  if (description.value.trim()) entries.push({ name: 'description', value: description.value.trim() });
+  const pInitial = asInt(periodInitial.value);
+  if (pInitial !== undefined) entries.push({ name: 'periodInitial', value: pInitial });
+  if (rateInitial.value.trim()) entries.push({ name: 'rateInitial', value: rateInitial.value.trim() });
+  const pAdditional = asInt(periodAdditional.value);
+  if (pAdditional !== undefined) entries.push({ name: 'periodAdditional', value: pAdditional });
+  if (rateAdditional.value.trim()) entries.push({ name: 'rateAdditional', value: rateAdditional.value.trim() });
   emit('save', entries, editing.value);
   open.value = false;
 }
