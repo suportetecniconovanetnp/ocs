@@ -99,8 +99,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'tariffs/roaming',
         name: 'tariffs-roaming',
-        component: () => import('@/views/PlaceholderView.vue'),
-        props: { title: 'Roaming tariffs', legacyFile: 'sig-tariff-roaming-list.js' },
+        component: () => import('@/views/TariffRoamingView.vue'),
         meta: { titleKey: 'tariffsRoaming', icon: 'mdi-earth' },
       },
       {
