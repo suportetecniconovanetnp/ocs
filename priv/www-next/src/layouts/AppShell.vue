@@ -51,6 +51,7 @@ const navItems: (NavLink | NavGroup)[] = [
       { to: '/logs/balance', titleKey: 'balanceLog', icon: 'mdi-cash-register' },
       { to: '/logs/http', titleKey: 'httpLog', icon: 'mdi-web' },
       { to: '/logs/ipdr/wlan', titleKey: 'ipdrWlan', icon: 'mdi-wifi' },
+      { to: '/logs/ipdr/voip', titleKey: 'ipdrVoip', icon: 'mdi-phone' },
     ],
   },
   {
