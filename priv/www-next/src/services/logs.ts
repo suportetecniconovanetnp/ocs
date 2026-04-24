@@ -1,9 +1,13 @@
-import { getList, rangeHeader, type PagedResult } from './http';
+import { http, getList, rangeHeader, encodePath, type PagedResult } from './http';
 import type { AbmfEvent, HttpEvent, Usage } from '@/types/tmf';
 
 const USAGE_BASE = '/usageManagement/v1/usage';
 const HTTP_LOG = '/ocs/v1/log/http';
 const ABMF_LOG = '/ocs/v1/log/balance';
+const IPDR_FILES_BASE = '/ocs/v1/log/ipdr';
+
+/** IPDR subtypes exposed by SigScale OCS. */
+export type IpdrType = 'wlan' | 'voip';
 
 export interface UsageQuery {
   /**
@@ -163,5 +167,32 @@ export const logsApi = {
    */
   http(start = 0, end = 99): Promise<PagedResult<HttpEvent>> {
     return getList<HttpEvent>(HTTP_LOG, { headers: rangeHeader(start, end) });
+  },
+  /**
+   * List IPDR log files stored on the OCS host. Backend at
+   * `ocs_rest_res_usage:get_ipdr/2` walks the `ipdr_log_dir/{type}/`
+   * directory and returns the filenames sorted newest-first. Each name
+   * is an ISO-8601 timestamp of the rotation moment.
+   */
+  async ipdrFiles(type: IpdrType): Promise<string[]> {
+    const resp = await http.get<string[]>(`${IPDR_FILES_BASE}/${type}`);
+    return Array.isArray(resp.data) ? resp.data : [];
+  },
+  /**
+   * Fetch one IPDR file's contents as TMF Usage records. Backend
+   * supports the standard Range-header pagination through
+   * `ocs_rest_res_usage:get_usages/4` with `Type=wlan|voip` and
+   * `Id=<filename>`. Each record's fields live in
+   * `usageCharacteristic` — the caller picks them out.
+   */
+  ipdrRecords(
+    type: IpdrType,
+    file: string,
+    start = 0,
+    end = 999,
+  ): Promise<PagedResult<Usage>> {
+    return getList<Usage>(`${USAGE_BASE}/ipdr/${type}/${encodePath(file)}`, {
+      headers: rangeHeader(start, end),
+    });
   },
 };
