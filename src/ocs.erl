@@ -1836,35 +1836,39 @@ add_resource(#resource{name = TableName,
 		((SpecId == ?TARIFF_TABLE_SPEC)
 				orelse (SpecId == ?PERIOD_TABLE_SPEC)
 				orelse (SpecId == ?ROAMING_TABLE_SPEC)) ->
-	case mnesia:table_info(list_to_existing_atom(TableName),
-			attributes) of
-		[num, value] ->
-			Find = fun F(eof, Acc) ->
-						lists:flatten(Acc);
-					F(Cont1, Acc) ->
-						{Cont2, L} = ocs:query_resource(Cont1,
-								'_', {exact, TableName}, {exact, SpecId}, '_'),
-						F(Cont2, [L | Acc])
-			end,
-			case Find(start, []) of
-				[] ->
-					TS = erlang:system_time(millisecond),
-					N = erlang:unique_integer([positive]),
-					Id = integer_to_list(TS) ++ integer_to_list(N),
-					LM = {TS, N},
-					Href = ?PathResInv ++ "resource/" ++ Id,
-					NewResource = Resource#resource{id = Id,
-							href = Href, last_modified = LM},
-					Ftrans = fun() ->
-								ok = mnesia:write(NewResource),
-								NewResource
+	case ensure_gtt_table(TableName) of
+		{ok, TableAtom} ->
+			case mnesia:table_info(TableAtom, attributes) of
+				[num, value] ->
+					Find = fun F(eof, Acc) ->
+								lists:flatten(Acc);
+							F(Cont1, Acc) ->
+								{Cont2, L} = ocs:query_resource(Cont1,
+										'_', {exact, TableName}, {exact, SpecId}, '_'),
+								F(Cont2, [L | Acc])
 					end,
-					add_resource1(mnesia:transaction(Ftrans));
-				[#resource{} | _] ->
-					{error, table_exists}
+					case Find(start, []) of
+						[] ->
+							TS = erlang:system_time(millisecond),
+							N = erlang:unique_integer([positive]),
+							Id = integer_to_list(TS) ++ integer_to_list(N),
+							LM = {TS, N},
+							Href = ?PathResInv ++ "resource/" ++ Id,
+							NewResource = Resource#resource{id = Id,
+									href = Href, last_modified = LM},
+							Ftrans = fun() ->
+										ok = mnesia:write(NewResource),
+										NewResource
+							end,
+							add_resource1(mnesia:transaction(Ftrans));
+						[#resource{} | _] ->
+							{error, table_exists}
+					end;
+				_ ->
+					{error, table_not_found}
 			end;
-		_ ->
-			{error, table_not_found}
+		{error, Reason} ->
+			{error, Reason}
 	end;
 add_resource(#resource{id = undefined, href = undefined,
 		specification = #specification_ref{id = ?TARIFF_ROW_SPEC},
@@ -2027,6 +2031,55 @@ add_resource1({atomic, #resource{} = Resource}) ->
 	{ok, Resource};
 add_resource1({aborted, Reason}) ->
 	{error, Reason}.
+
+%% @doc Return `{ok, TableAtom}' for an existing tariff GTT, or create
+%% the underlying Mnesia table first when the operator requested a
+%% brand-new tariff table through the REST API.
+%%
+%% The previous implementation called `list_to_existing_atom/1'
+%% directly inside `add_resource/1' and then `mnesia:table_info/2'.
+%% When the named GTT had never been created (the SigScale example
+%% bootstrap only seeds `tariff-rates' — any other table has to be
+%% built manually via `ocs_gtt:new/2' in the Erlang shell) the atom
+%% itself did not exist, so `list_to_existing_atom' raised `badarg'
+%% which bubbled out to the REST handler's generic catch-all and
+%% surfaced as `400 "Exception occurred parsing request body"' —
+%% misleading enough that neither the legacy Polymer UI nor the new
+%% Vue UI could successfully create a new tariff table from a POST.
+%%
+%% Handles three cases:
+%%   1. Atom and Mnesia table both exist → return the atom.
+%%   2. Atom exists but Mnesia table is missing → create the GTT.
+%%   3. Atom does not exist yet → allocate via `list_to_atom/1' and
+%%      create the GTT.
+%%
+%% Any other shape of `mnesia:table_info/2' (e.g. the atom names a
+%% non-GTT table) falls through as `{error, table_not_a_gtt}' so we
+%% do not clobber unrelated tables.
+%% @hidden
+ensure_gtt_table(TableName) when is_list(TableName) ->
+	TableAtom = case catch list_to_existing_atom(TableName) of
+		{'EXIT', _} ->
+			list_to_atom(TableName);
+		Atom when is_atom(Atom) ->
+			Atom
+	end,
+	case catch mnesia:table_info(TableAtom, attributes) of
+		[num, value] ->
+			{ok, TableAtom};
+		{'EXIT', {aborted, {no_exists, _, _}}} ->
+			try ocs_gtt:new(TableName, []) of
+				ok ->
+					{ok, TableAtom}
+			catch
+				_:{already_exists, _} ->
+					{ok, TableAtom};
+				_:Reason ->
+					{error, Reason}
+			end;
+		_Other ->
+			{error, table_not_a_gtt}
+	end.
 
 -spec update_resource(Resource) -> Result
 	when
