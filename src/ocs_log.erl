@@ -839,7 +839,7 @@ cdr_file3(Log, IoDevice, csv, {Cont, Events}) ->
 %% filtering happens in the REST codec layer.
 %% @private
 ipdr_query(Continuation, Log, _Start, _End, _AttrsMatch) ->
-	case disk_log:chunk(Log, Continuation) of
+	try disk_log:chunk(Log, Continuation) of
 		eof ->
 			{eof, []};
 		{error, Reason} ->
@@ -853,7 +853,19 @@ ipdr_query(Continuation, Log, _Start, _End, _AttrsMatch) ->
 					{log, Log}, {bad_bytes, BadBytes}]),
 			{Continuation1, Events};
 		{Continuation1, Events} ->
-			{Continuation1, Events}
+			{Continuation1, Events};
+		Other ->
+			error_logger:error_report([{module, ?MODULE},
+					{operation, ipdr_query},
+					{log, Log}, {unexpected_return, Other}]),
+			{eof, []}
+	catch
+		Class:ExReason ->
+			error_logger:error_report([{module, ?MODULE},
+					{operation, ipdr_query},
+					{log, Log},
+					{exception, {Class, ExReason}}]),
+			{eof, []}
 	end.
 
 -spec ipdr_log(Type, File, Start, End) -> Result
