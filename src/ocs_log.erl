@@ -59,7 +59,7 @@
 -export([ipdr_log/4, ipdr_file/3]).
 
 %% export the private API
--export([acct_query/4, auth_query/5, abmf_query/6, ipdr_query/5]).
+-export([acct_query/4, auth_query/5, abmf_query/6]).
 -export([btree_search/2]).
 
 -include("ocs_log.hrl").
@@ -795,78 +795,6 @@ cdr_file3(_Log, _IoDevice, json, {_Cont,_Events}) ->
 	 {error, unimplemented};
 cdr_file3(Log, IoDevice, csv, {Cont, Events}) ->
 	chf_csv(Log, IoDevice, $,, {Cont, Events}).
-
--spec ipdr_query(Continuation, Log, Start, End, AttrsMatch) -> Result
-	when
-		Continuation :: start | disk_log:continuation(),
-		Log :: atom() | tuple(),
-		Start :: calendar:datetime() | timestamp(),
-		End :: calendar:datetime() | timestamp(),
-		AttrsMatch :: [{Attribute, Match}] | '_',
-		Attribute :: byte(),
-		Match :: {exact, term()} | {notexact, term()}
-				| {lt, term()} | {lte, term()}
-				| {gt, term()} | {gte, term()}
-				| {regex, term()} | {like, [term()]} | {notlike, [term()]}
-				| {in, [term()]} | {notin, [term()]} | {contains, [term()]}
-				| {notcontain, [term()]} | {containsall, [term()]} | '_',
-		Result :: {Continuation2, Events},
-		Continuation2 :: eof | disk_log:continuation(),
-		Events :: [acct_event()].
-%% @doc Stream the next chunk of IPDR records from the given disk_log.
-%%
-%% Callback registered with the pagination server by
-%% `ocs_rest_res_usage:get_usages/4' when serving
-%% GET /usageManagement/v1/usage/ipdr/wlan/{file} and the voip variant.
-%%
-%% Upstream commit b62a5999 ("remove unused ipdr_query/2,5 functions",
-%% Jun 2025) dropped this arity, but the removal was overeager:
-%% ocs_rest_res_usage.erl still reaches this function indirectly via
-%% the pagination supervisor. Without it every IPDR file read crashes
-%% with undef, surfaced by the REST handler as HTTP 500
-%% "Exception caught while calling the pagination server".
-%%
-%% This is the chunking stub from the pre-b62a5999 implementation,
-%% widened to handle all four return shapes of disk_log:chunk/2 so
-%% that an IPDR file interrupted mid-rotation, or one with a few
-%% corrupted bytes near the tail, still yields a clean response to
-%% the pagination server rather than crashing with function_clause
-%% (which bubbles uncaught out of the REST handler and surfaces as
-%% a generic inets HTML 500 instead of a proper JSON error).
-%%
-%% The Start/End/AttrsMatch arguments are intentionally unused: the
-%% IPDR file is already scoped to a single rotation window and
-%% filtering happens in the REST codec layer.
-%% @private
-ipdr_query(Continuation, Log, _Start, _End, _AttrsMatch) ->
-	try disk_log:chunk(Log, Continuation) of
-		eof ->
-			{eof, []};
-		{error, Reason} ->
-			error_logger:warning_report([{module, ?MODULE},
-					{operation, ipdr_query},
-					{log, Log}, {reason, Reason}]),
-			{eof, []};
-		{Continuation1, Events, BadBytes} when is_integer(BadBytes) ->
-			error_logger:warning_report([{module, ?MODULE},
-					{operation, ipdr_query},
-					{log, Log}, {bad_bytes, BadBytes}]),
-			{Continuation1, Events};
-		{Continuation1, Events} ->
-			{Continuation1, Events};
-		Other ->
-			error_logger:error_report([{module, ?MODULE},
-					{operation, ipdr_query},
-					{log, Log}, {unexpected_return, Other}]),
-			{eof, []}
-	catch
-		Class:ExReason ->
-			error_logger:error_report([{module, ?MODULE},
-					{operation, ipdr_query},
-					{log, Log},
-					{exception, {Class, ExReason}}]),
-			{eof, []}
-	end.
 
 -spec ipdr_log(Type, File, Start, End) -> Result
 	when
