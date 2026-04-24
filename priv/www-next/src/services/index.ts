@@ -14,6 +14,15 @@ export {
 export { usersApi, type OcsUser, type UserFormInput } from './users';
 export { productsApi } from './products';
 export {
+  tariffsApi,
+  charString,
+  charNumber,
+  diffCharacteristics,
+  type JsonPatchOp,
+  type TariffRowInput,
+  type TariffTableRef,
+} from './tariffs';
+export {
   healthApi,
   diameterAppTotals,
   ccaResults,

@@ -87,8 +87,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'tariffs/rate',
         name: 'tariffs-rate',
-        component: () => import('@/views/PlaceholderView.vue'),
-        props: { title: 'Rate tariffs', legacyFile: 'sig-tariff-rate-list.js' },
+        component: () => import('@/views/TariffRateView.vue'),
         meta: { titleKey: 'tariffsRate', icon: 'mdi-cash-multiple' },
       },
       {

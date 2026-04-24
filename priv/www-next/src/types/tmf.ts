@@ -198,13 +198,43 @@ export interface Bucket {
   lifecycleStatus?: string;
 }
 
+export interface ResourceSpecificationRef {
+  id: string;
+  href?: string;
+  name?: string;
+}
+
+export interface ResourceRelationship {
+  relationshipType?: string;
+  resource?: { id: string; href?: string; name?: string };
+}
+
 export interface Resource {
   id: string;
   href?: string;
   name?: string;
+  description?: string;
   category?: string;
   resourceCharacteristic?: Characteristic[];
+  resourceSpecification?: ResourceSpecificationRef;
+  resourceRelationship?: ResourceRelationship[];
+  lastModified?: Iso8601;
 }
+
+/**
+ * TMF Resource specification IDs used by SigScale for tariff management.
+ * Each "table" is a parent #resource (spec 1/5/7); each "row" is a child
+ * #resource with a `resourceRelationship` back to its parent (spec 2/6/8).
+ * The three spec-id pairs define the three tariff categories exposed in
+ * the UI.
+ */
+export const TARIFF_SPEC = {
+  rate:    { tableId: '1', rowId: '2', rowSpecName: 'TariffTableRow' },
+  period:  { tableId: '5', rowId: '6', rowSpecName: 'PeriodTableRow' },
+  roaming: { tableId: '7', rowId: '8', rowSpecName: 'RoamingTableRow' },
+} as const;
+
+export type TariffKind = keyof typeof TARIFF_SPEC;
 
 export interface Client {
   id: string;
