@@ -826,15 +826,32 @@ cdr_file3(Log, IoDevice, csv, {Cont, Events}) ->
 %% with undef, surfaced by the REST handler as HTTP 500
 %% "Exception caught while calling the pagination server".
 %%
-%% This is the minimal chunking stub from the pre-b62a5999
-%% implementation. The Start/End/AttrsMatch arguments are intentionally
-%% unused: the IPDR file is already scoped to a single rotation window
-%% and filtering happens in the REST codec layer.
+%% This is the chunking stub from the pre-b62a5999 implementation,
+%% widened to handle all four return shapes of disk_log:chunk/2 so
+%% that an IPDR file interrupted mid-rotation, or one with a few
+%% corrupted bytes near the tail, still yields a clean response to
+%% the pagination server rather than crashing with function_clause
+%% (which bubbles uncaught out of the REST handler and surfaces as
+%% a generic inets HTML 500 instead of a proper JSON error).
+%%
+%% The Start/End/AttrsMatch arguments are intentionally unused: the
+%% IPDR file is already scoped to a single rotation window and
+%% filtering happens in the REST codec layer.
 %% @private
 ipdr_query(Continuation, Log, _Start, _End, _AttrsMatch) ->
 	case disk_log:chunk(Log, Continuation) of
 		eof ->
 			{eof, []};
+		{error, Reason} ->
+			error_logger:warning_report([{module, ?MODULE},
+					{operation, ipdr_query},
+					{log, Log}, {reason, Reason}]),
+			{eof, []};
+		{Continuation1, Events, BadBytes} when is_integer(BadBytes) ->
+			error_logger:warning_report([{module, ?MODULE},
+					{operation, ipdr_query},
+					{log, Log}, {bad_bytes, BadBytes}]),
+			{Continuation1, Events};
 		{Continuation1, Events} ->
 			{Continuation1, Events}
 	end.
