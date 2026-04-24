@@ -1,5 +1,5 @@
 import { getList, rangeHeader, type PagedResult } from './http';
-import type { AbmfEvent, Usage } from '@/types/tmf';
+import type { AbmfEvent, HttpEvent, Usage } from '@/types/tmf';
 
 const USAGE_BASE = '/usageManagement/v1/usage';
 const HTTP_LOG = '/ocs/v1/log/http';
@@ -154,7 +154,14 @@ export const logsApi = {
       params,
     });
   },
-  http(start = 0, end = 99): Promise<PagedResult<unknown>> {
-    return getList<unknown>(HTTP_LOG, { headers: rangeHeader(start, end) });
+  /**
+   * inets HTTP access log (transfer_disk_log). The backend handler
+   * (`ocs_rest_res_http:get_http/0`) takes no query params and ignores
+   * Range headers — it always returns the latest `rest_page_size` items.
+   * Pagination of this dataset is therefore client-side. We still pass a
+   * range header for consistency with other log APIs; it's a no-op.
+   */
+  http(start = 0, end = 99): Promise<PagedResult<HttpEvent>> {
+    return getList<HttpEvent>(HTTP_LOG, { headers: rangeHeader(start, end) });
   },
 };

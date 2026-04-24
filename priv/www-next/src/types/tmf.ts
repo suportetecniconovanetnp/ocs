@@ -257,6 +257,21 @@ export function characteristicNumber(usage: Usage, name: string): number | undef
 }
 
 /**
+ * HTTP access log record, as emitted by `ocs_rest_res_http:get_http/0`.
+ * The backend parses Apache Common Log Format entries from the inets
+ * `transfer_disk_log` — `datetime` arrives as `"DD/Mon/YYYY:HH:MM:SS +ZZZZ"`,
+ * NOT ISO-8601, so formatters must accept that shape.
+ */
+export interface HttpEvent {
+  datetime?: string;
+  host?: string;
+  user?: string;
+  method?: string;
+  uri?: string;
+  httpStatus?: number;
+}
+
+/**
  * ABMF (Account Balance Management Function) log record.
  *
  * Shape per SigScale `ocs_rest_res_balance:abmf/1` codec. Consumed by the

@@ -49,6 +49,7 @@ const navItems: (NavLink | NavGroup)[] = [
       { to: '/logs/access', titleKey: 'access', icon: 'mdi-shield-key' },
       { to: '/logs/accounting', titleKey: 'accounting', icon: 'mdi-receipt-text' },
       { to: '/logs/balance', titleKey: 'balanceLog', icon: 'mdi-cash-register' },
+      { to: '/logs/http', titleKey: 'httpLog', icon: 'mdi-web' },
     ],
   },
   {
