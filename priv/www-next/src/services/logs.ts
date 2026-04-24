@@ -1,13 +1,9 @@
-import { http, getList, rangeHeader, type PagedResult } from './http';
+import { getList, rangeHeader, type PagedResult } from './http';
 import type { AbmfEvent, HttpEvent, Usage } from '@/types/tmf';
 
 const USAGE_BASE = '/usageManagement/v1/usage';
 const HTTP_LOG = '/ocs/v1/log/http';
 const ABMF_LOG = '/ocs/v1/log/balance';
-const IPDR_FILES_BASE = '/ocs/v1/log/ipdr';
-
-/** IPDR subtypes exposed by SigScale OCS. */
-export type IpdrType = 'wlan' | 'voip';
 
 export interface UsageQuery {
   /**
@@ -168,43 +164,12 @@ export const logsApi = {
   http(start = 0, end = 99): Promise<PagedResult<HttpEvent>> {
     return getList<HttpEvent>(HTTP_LOG, { headers: rangeHeader(start, end) });
   },
-  /**
-   * List IPDR log files stored on the OCS host. Backend at
-   * `ocs_rest_res_usage:get_ipdr/2` walks the `ipdr_log_dir/{type}/`
-   * directory and returns the filenames sorted newest-first. Each name
-   * is an ISO-8601 timestamp of the rotation moment.
-   */
-  async ipdrFiles(type: IpdrType): Promise<string[]> {
-    const resp = await http.get<string[]>(`${IPDR_FILES_BASE}/${type}`);
-    return Array.isArray(resp.data) ? resp.data : [];
-  },
-  /**
-   * Fetch one IPDR file's contents as TMF Usage records. Backend
-   * supports the standard Range-header pagination through
-   * `ocs_rest_res_usage:get_usages/4` with `Type=wlan|voip` and
-   * `Id=<filename>`. Each record's fields live in
-   * `usageCharacteristic` — the caller picks them out.
-   *
-   * IMPORTANT: the filename must go on the wire **un-encoded**. This
-   * mirrors the legacy `sig-ipdr-list-{wlan,voip}.js` behaviour
-   * (`ajax.url = "…/ipdr/wlan/" + event.model.item` — no encoder). The
-   * SigScale inets+mod_ocs_rest_get routing appears to mishandle the
-   * percent-encoded form (e.g. `%3A` for `:` in the ISO-8601 timestamp)
-   * and returns a generic 500 HTML from inets itself instead of a
-   * JSON 404/400 from the handler. We therefore DO NOT call
-   * `encodePath` on the filename — the chars that appear in practice
-   * (`-`, `:`, `.`, `T`, `Z`, digits) are all safe in URL path
-   * segments per RFC 3986 §3.3 (`pchar = unreserved / pct-encoded /
-   * sub-delims / ":" / "@"`).
-   */
-  ipdrRecords(
-    type: IpdrType,
-    file: string,
-    start = 0,
-    end = 999,
-  ): Promise<PagedResult<Usage>> {
-    return getList<Usage>(`${USAGE_BASE}/ipdr/${type}/${file}`, {
-      headers: rangeHeader(start, end),
-    });
-  },
 };
+
+// NOTE: IPDR WLAN/VoIP viewer integration was removed pending upstream
+// resolution — see `docs/` / commit message of the drop commit. The
+// backend `ocs_log:ipdr_query/5' was deleted upstream in b62a5999 but
+// `ocs_rest_res_usage.erl' still references it, so every read of
+// /usageManagement/v1/usage/ipdr/{wlan|voip}/{file} crashes uncaught.
+// Reintroduce `ipdrFiles`/`ipdrRecords` here (and the views) once that
+// bug is fixed in the SigScale tree we track.

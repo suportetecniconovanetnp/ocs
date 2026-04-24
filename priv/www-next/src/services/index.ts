@@ -10,7 +10,6 @@ export {
   SUBSCRIBER_ID_CHARS,
   type UsageQuery,
   type AbmfQuery,
-  type IpdrType,
 } from './logs';
 export { usersApi, type OcsUser, type UserFormInput } from './users';
 export { productsApi } from './products';

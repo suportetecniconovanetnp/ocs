@@ -85,18 +85,6 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'httpLog', icon: 'mdi-web' },
       },
       {
-        path: 'logs/ipdr/wlan',
-        name: 'logs-ipdr-wlan',
-        component: () => import('@/views/LogsIpdrWlanView.vue'),
-        meta: { titleKey: 'ipdrWlan', icon: 'mdi-wifi' },
-      },
-      {
-        path: 'logs/ipdr/voip',
-        name: 'logs-ipdr-voip',
-        component: () => import('@/views/LogsIpdrVoipView.vue'),
-        meta: { titleKey: 'ipdrVoip', icon: 'mdi-phone' },
-      },
-      {
         path: 'tariffs/rate',
         name: 'tariffs-rate',
         component: () => import('@/views/PlaceholderView.vue'),
