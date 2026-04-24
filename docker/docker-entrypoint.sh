@@ -59,6 +59,16 @@ env_default OCS_EXPORT_DIR 'log/export'
 env_default OCS_ACCT_LOG_ROTATE_MIN '1440'
 env_default OCS_ACCT_LOG_ROTATE_TIME '{4,4,4}'
 
+# Per-log retention (matches the ocs.app defaults: 10 MiB per file, 100 files).
+# Each log is a FIFO disk_log wrap log, so total on-disk footprint per log is
+# bounded by SIZE_BYTES * FILE_COUNT.
+env_default OCS_ACCT_LOG_SIZE_BYTES '10485760'
+env_default OCS_ACCT_LOG_FILE_COUNT '100'
+env_default OCS_AUTH_LOG_SIZE_BYTES '10485760'
+env_default OCS_AUTH_LOG_FILE_COUNT '100'
+env_default OCS_ABMF_LOG_SIZE_BYTES '10485760'
+env_default OCS_ABMF_LOG_FILE_COUNT '100'
+
 # TLS
 env_default OCS_TLS_KEY 'ssl/key.pem'
 env_default OCS_TLS_CERT 'ssl/cert.pem'
@@ -184,8 +194,14 @@ render_sys_config() {
       {acct_log_rotate, ${OCS_ACCT_LOG_ROTATE_MIN}},
       {acct_log_rotate_time, ${OCS_ACCT_LOG_ROTATE_TIME}},
       {acct_log_dir, "${OCS_ACCT_LOG_DIR}"},
+      {acct_log_size, ${OCS_ACCT_LOG_SIZE_BYTES}},
+      {acct_log_files, ${OCS_ACCT_LOG_FILE_COUNT}},
       {auth_log_dir, "${OCS_AUTH_LOG_DIR}"},
+      {auth_log_size, ${OCS_AUTH_LOG_SIZE_BYTES}},
+      {auth_log_files, ${OCS_AUTH_LOG_FILE_COUNT}},
       {abmf_log_dir, "${OCS_ABMF_LOG_DIR}"},
+      {abmf_log_size, ${OCS_ABMF_LOG_SIZE_BYTES}},
+      {abmf_log_files, ${OCS_ABMF_LOG_FILE_COUNT}},
       {ipdr_log_dir, "${OCS_IPDR_LOG_DIR}"},
       {export_dir, "${OCS_EXPORT_DIR}"},
       {tls_key, "${OCS_TLS_KEY}"},
