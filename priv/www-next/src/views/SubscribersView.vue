@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { subscribersApi } from '@/services';
+import { subscribersApi, productsApi } from '@/services';
 import { useAsyncResource } from '@/composables/useAsyncResource';
 import { useNotificationsStore } from '@/stores/notifications';
 import { useSafeT } from '@/composables/useSafeT';
 import SubscriberFormDialog from '@/components/SubscriberFormDialog.vue';
 import SubscriberTrafficDialog from '@/components/SubscriberTrafficDialog.vue';
+import TopupDialog from '@/components/TopupDialog.vue';
 import ConfirmDialog from '@/components/ConfirmDialog.vue';
 import type { Service } from '@/types/tmf';
 
@@ -21,7 +22,18 @@ const expanded = ref<string[]>([]);
 const editing = ref<Service | null>(null);
 const formDialog = ref<InstanceType<typeof SubscriberFormDialog> | null>(null);
 const trafficDialog = ref<InstanceType<typeof SubscriberTrafficDialog> | null>(null);
+const topupDialog = ref<InstanceType<typeof TopupDialog> | null>(null);
 const confirmDialog = ref<InstanceType<typeof ConfirmDialog> | null>(null);
+const pendingDelete = ref<{ serviceId: string; productId: string | undefined } | null>(null);
+
+const deleteMessage = computed(() => {
+  const p = pendingDelete.value;
+  if (!p) return '';
+  if (!p.productId) {
+    return `This will permanently remove subscriber "${p.serviceId}". Continue?`;
+  }
+  return `This will permanently remove subscriber "${p.serviceId}" AND its associated product "${p.productId}" (including all buckets bound to that product). Continue?`;
+});
 
 const range = computed(() => {
   const start = (page.value - 1) * itemsPerPage.value;
@@ -55,7 +67,7 @@ const headers = [
   { title: 'Password', key: 'password', sortable: false },
   { title: 'Multi-session', key: 'multisession', sortable: false },
   { title: 'Other', key: 'extras', sortable: false },
-  { title: '', key: 'actions', sortable: false, align: 'end' as const, width: 200 },
+  { title: '', key: 'actions', sortable: false, align: 'end' as const, width: 240 },
   { title: '', key: 'data-table-expand', width: 56 },
 ];
 
@@ -88,6 +100,18 @@ function viewBuckets(svc: Service) {
   router.push({ name: 'buckets', query: { product: productId } });
 }
 
+// Open the top-up/adjustment dialog with the subscriber's product pre-filled.
+function topup(svc: Service) {
+  const productId = productIdFromService(svc);
+  if (!productId) {
+    notifications.warning(
+      'This subscriber has no associated product — credits cannot be applied.',
+    );
+    return;
+  }
+  topupDialog.value?.show(productId);
+}
+
 // Traffic history: filter accounting logs by the subscriber's serviceIdentity
 // (falls back to the service id when not set in characteristics).
 function viewTraffic(svc: Service) {
@@ -106,16 +130,40 @@ function edit(svc: Service) {
   formDialog.value?.show();
 }
 
+// Delete the subscriber service and the product that realises it, matching
+// the lifecycle expected by operators: once a subscriber is gone, its
+// product (and therefore its buckets) no longer serves anyone, so leaving
+// them behind just pollutes the inventory. The cascade is best-effort —
+// the service delete is the source of truth; if the product delete fails
+// afterwards the user gets a warning and can clean up manually.
 async function remove(svc: Service) {
+  const productId = productIdFromService(svc);
+  pendingDelete.value = { serviceId: svc.id, productId };
   const ok = await confirmDialog.value?.ask();
+  pendingDelete.value = null;
   if (!ok) return;
+
   try {
     await subscribersApi.delete(svc.id);
-    notifications.success('Subscriber deleted.');
-    void subscribers.reload();
   } catch {
-    /* interceptor toasts */
+    return; // HTTP interceptor already surfaced the backend error
   }
+
+  if (!productId) {
+    notifications.success(`Subscriber ${svc.id} deleted.`);
+    void subscribers.reload();
+    return;
+  }
+
+  try {
+    await productsApi.delete(productId);
+    notifications.success(`Subscriber ${svc.id} and product ${productId} deleted.`);
+  } catch {
+    notifications.warning(
+      `Subscriber ${svc.id} deleted, but removing product ${productId} failed. Clean it up from the Catalog view.`,
+    );
+  }
+  void subscribers.reload();
 }
 </script>
 
@@ -212,6 +260,14 @@ async function remove(svc: Service) {
               @click="viewTraffic(item)"
             />
             <v-btn
+              icon="mdi-cash-plus"
+              variant="text"
+              size="small"
+              :title="productIdFromService(item) ? 'Top-up / adjustment' : 'No product associated'"
+              :disabled="!productIdFromService(item)"
+              @click="topup(item)"
+            />
+            <v-btn
               icon="mdi-wallet"
               variant="text"
               size="small"
@@ -254,10 +310,11 @@ async function remove(svc: Service) {
 
     <SubscriberFormDialog ref="formDialog" :subscriber="editing" @saved="subscribers.reload" />
     <SubscriberTrafficDialog ref="trafficDialog" />
+    <TopupDialog ref="topupDialog" @done="subscribers.reload" />
     <ConfirmDialog
       ref="confirmDialog"
       title="Delete subscriber"
-      message="This will permanently remove the subscriber. Continue?"
+      :message="deleteMessage"
       confirm-text="Delete"
     />
   </div>

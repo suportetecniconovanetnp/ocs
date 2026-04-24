@@ -141,17 +141,48 @@ export interface Service {
   productId?: string;
 }
 
+/**
+ * SigScale serializes status with both camelCase atoms (`pendingActive`) and
+ * the human "Title Case" labels seen in legacy responses (`"Pending Active"`).
+ * Accept both forms when parsing — when sending we always use the camelCase
+ * variant defined by TMF.
+ */
+export type ProductStatus =
+  | 'created'
+  | 'pendingActive'
+  | 'cancelled'
+  | 'active'
+  | 'pendingTerminate'
+  | 'terminated'
+  | 'suspended'
+  | 'aborted'
+  | 'Created'
+  | 'Pending Active'
+  | 'Cancelled'
+  | 'Active'
+  | 'Pending Terminate'
+  | 'Terminated'
+  | 'Suspended'
+  | 'Aborted';
+
+export interface ProductBalanceEntry {
+  /** Aggregated remaining balance for one units family. */
+  totalBalance?: Quantity;
+}
+
 export interface Product {
   id: string;
   href?: string;
   name?: string;
-  status?: 'created' | 'pendingActive' | 'cancelled' | 'active' | 'pendingTerminate' | 'terminated' | 'suspended' | 'aborted';
+  status?: ProductStatus;
   startDate?: Iso8601;
   terminationDate?: Iso8601;
-  productOffering?: { id: string; name?: string };
-  realizingService?: { id: string }[];
+  productOffering?: { id: string; name?: string; href?: string };
+  realizingService?: { id: string; href?: string }[];
   productCharacteristic?: Characteristic[];
   relatedParty?: RelatedParty[];
+  /** Aggregated balances per unit type, exposed by SigScale's product list. */
+  balance?: ProductBalanceEntry[];
 }
 
 export interface Bucket {

@@ -55,6 +55,12 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'buckets', icon: 'mdi-wallet' },
       },
       {
+        path: 'products',
+        name: 'products',
+        component: () => import('@/views/ProductsView.vue'),
+        meta: { titleKey: 'products', icon: 'mdi-package-variant' },
+      },
+      {
         path: 'logs/access',
         name: 'logs-access',
         component: () => import('@/views/LogsAccessView.vue'),

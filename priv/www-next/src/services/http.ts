@@ -111,6 +111,15 @@ http.interceptors.response.use(
   (error: AxiosError<ProblemDetails | string>) => {
     const status = error.response?.status ?? 0;
     const data = error.response?.data;
+    // Requests that know a 4xx is an expected outcome (e.g. a 404 used as a
+    // "not found" probe) set `X-OCS-Silent: 404` on the request config so the
+    // interceptor skips the noisy console dump.
+    const cfg = error.config;
+    const silentHeader = (cfg?.headers as Record<string, unknown> | undefined)?.[
+      'X-OCS-Silent'
+    ];
+    const silentFor = typeof silentHeader === 'string' ? silentHeader.split(',') : [];
+    const shouldLog = !silentFor.includes(String(status));
     let problem: ProblemDetails | undefined;
     let message: string;
     if (data && typeof data === 'object') {
@@ -130,8 +139,7 @@ http.interceptors.response.use(
 
     // Surface request/response details in the dev console so 4xx failures
     // can be diagnosed without opening DevTools network panel.
-    if (import.meta.env.DEV && status >= 400) {
-      const cfg = error.config;
+    if (import.meta.env.DEV && status >= 400 && shouldLog) {
       const method = cfg?.method?.toUpperCase() ?? 'REQ';
       const url = cfg?.url ?? '';
       const reqBody = typeof cfg?.data === 'string' ? cfg.data : JSON.stringify(cfg?.data);

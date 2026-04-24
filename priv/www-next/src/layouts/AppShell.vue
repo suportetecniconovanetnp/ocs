@@ -29,6 +29,7 @@ const navItems: (NavLink | NavGroup)[] = [
     icon: 'mdi-tag-multiple',
     children: [
       { to: '/catalog', titleKey: 'offerings', icon: 'mdi-tag-text' },
+      { to: '/products', titleKey: 'products', icon: 'mdi-package-variant' },
       { to: '/buckets', titleKey: 'buckets', icon: 'mdi-wallet' },
     ],
   },

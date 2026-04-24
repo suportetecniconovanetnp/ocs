@@ -4,28 +4,19 @@ import type { Bucket, Quantity } from '@/types/tmf';
 const BASE = '/balanceManagement/v1';
 const enc = encodePath;
 
-/**
- * Build a SigScale/Vaadin-style filter expression.
- * Example: filterByProduct("724…") → `"[{product.id.like=[724…%]}]"`
- *
- * The legacy bucket-list uses iron-ajax with this exact syntax — quoted JSON-ish
- * string with bracketed list of `path.op=[value]` clauses, terminated with `%`.
- */
-function filterByProduct(productId: string): string {
-  return `"[{product.id.like=[${productId}%]}]"`;
-}
-
 export const balanceApi = {
   /**
-   * List buckets, optionally filtered by product ID. SigScale doesn't expose
-   * a /product/{id}/bucket route on every deployment, so we always hit
-   * /bucket and pass the filter as a query parameter (matching the legacy
-   * sig-bucket-list behaviour).
+   * List buckets. A `productId` filter is applied client-side by the caller
+   * (typically BucketsView) — we do NOT push it into the Vaadin `?filter=`
+   * query anymore because
+   *   `"[{product.id.like=[<id>%]}]"`
+   * crashes the SigScale endpoint with HTTP 500 whenever the value contains
+   * special characters (hyphens, timestamps, etc.). Matches the defensive
+   * strategy adopted for catalog/accounting logs.
    */
-  listBuckets(productId?: string, start = 0, end = 49): Promise<PagedResult<Bucket>> {
+  listBuckets(_productId?: string, start = 0, end = 49): Promise<PagedResult<Bucket>> {
     return getList<Bucket>(`${BASE}/bucket`, {
       headers: rangeHeader(start, end),
-      params: productId ? { filter: filterByProduct(productId) } : undefined,
     });
   },
   getBucket(id: string): Promise<Bucket> {
@@ -48,8 +39,14 @@ export const balanceApi = {
   adjustment(productId: string, amount: Quantity): Promise<unknown> {
     return http
       .post(`${BASE}/balanceAdjustment`, {
+        // Legacy sig-sub-add sends `type: "buckettype"` — without it the
+        // SigScale endpoint rejects or silently discards the adjustment.
+        type: 'buckettype',
         amount,
-        product: { id: productId },
+        product: {
+          id: productId,
+          href: `/productInventoryManagement/v2/product/${enc(productId)}`,
+        },
       })
       .then((r) => r.data);
   },

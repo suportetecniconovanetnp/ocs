@@ -18,28 +18,37 @@ const confirmDialog = ref<InstanceType<typeof ConfirmDialog> | null>(null);
 const notifications = useNotificationsStore();
 const { date, bytes, duration, number, money } = useFormatters();
 
-const range = computed(() => {
-  const start = (page.value - 1) * itemsPerPage.value;
-  return { start, end: start + itemsPerPage.value - 1 };
-});
+// Fetch a large page from the server (SigScale's Vaadin filter for
+// product.id crashes with hyphenated IDs) and filter client-side. 500 is
+// generous — typical deployments rarely have more live buckets than that.
+const FETCH_SIZE = ref(500);
 
 const buckets = useAsyncResource(() =>
-  balanceApi.listBuckets(filterProduct.value || undefined, range.value.start, range.value.end),
+  balanceApi.listBuckets(undefined, 0, FETCH_SIZE.value - 1),
 );
-watch([page, itemsPerPage], () => void buckets.reload());
 
+// Reset page to 1 whenever the filter changes, debounced.
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 watch(filterProduct, () => {
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
     page.value = 1;
-    void buckets.reload();
-  }, 400);
+  }, 200);
 });
 
-const total = computed(
-  () => buckets.data.value?.contentRange?.total ?? buckets.data.value?.total ?? 0,
-);
+const filtered = computed<Bucket[]>(() => {
+  const all = buckets.data.value?.items ?? [];
+  const needle = filterProduct.value.trim();
+  if (!needle) return all;
+  return all.filter((b) => (b.product?.id ?? '').includes(needle));
+});
+
+const total = computed(() => filtered.value.length);
+
+const paginated = computed(() => {
+  const start = (page.value - 1) * itemsPerPage.value;
+  return filtered.value.slice(start, start + itemsPerPage.value);
+});
 
 const headers = [
   { title: 'ID', key: 'id' },
@@ -83,7 +92,7 @@ function formatRemaining(q: Quantity | undefined): string {
 }
 
 const rows = computed(() =>
-  (buckets.data.value?.items ?? []).map((bucket) => ({
+  paginated.value.map((bucket) => ({
     id: bucket.id,
     product: bucket.product?.id ?? '—',
     units: bucket.remainedAmount?.units ?? '—',
@@ -126,8 +135,10 @@ async function remove(bucket: Bucket) {
         <v-text-field
           v-model="filterProduct"
           prepend-inner-icon="mdi-magnify"
-          placeholder="Filter by product ID"
+          placeholder="Filter by product ID (client-side substring match)"
           clearable
+          :hint="`Showing ${total} of ${buckets.data.value?.items.length ?? 0} fetched (cap ${FETCH_SIZE}).`"
+          persistent-hint
           class="mb-3"
         />
         <v-data-table-server
