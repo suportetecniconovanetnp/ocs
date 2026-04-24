@@ -93,8 +93,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'tariffs/period',
         name: 'tariffs-period',
-        component: () => import('@/views/PlaceholderView.vue'),
-        props: { title: 'Period tariffs', legacyFile: 'sig-tariff-period-list.js' },
+        component: () => import('@/views/TariffPeriodView.vue'),
         meta: { titleKey: 'tariffsPeriod', icon: 'mdi-calendar-clock' },
       },
       {
