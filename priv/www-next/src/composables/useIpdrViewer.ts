@@ -43,6 +43,16 @@ export function useIpdrViewer(type: IpdrType) {
   const records = ref<Usage[]>([]);
   const analyzing = ref(false);
   const analyzeProgress = ref({ loaded: 0, total: 0 });
+  /** Tracks whether analyzeSelected has completed at least once. Lets the
+   *  view distinguish "initial state" from "analyze ran but produced no
+   *  records", which have very different meanings to the operator. */
+  const analyzed = ref(false);
+  /** Summary of the last analyze run — used by the empty-state card when
+   *  records is empty post-analyze. */
+  const lastRunSummary = ref<{ filesRead: number; filesFailed: number }>({
+    filesRead: 0,
+    filesFailed: 0,
+  });
 
   /** Parse the leading YYYY-MM-DD from a filename, or undefined if invalid. */
   function fileDate(name: string): string | undefined {
@@ -175,9 +185,22 @@ export function useIpdrViewer(type: IpdrType) {
       await Promise.all(workers);
       collected.sort((a, b) => (b.date ?? '').localeCompare(a.date ?? ''));
       records.value = collected;
-      if (failures > 0) {
+      lastRunSummary.value = {
+        filesRead: targets.length - failures,
+        filesFailed: failures,
+      };
+      analyzed.value = true;
+      if (failures > 0 && collected.length === 0) {
+        notifications.error(
+          `All ${failures} selected file${failures === 1 ? '' : 's'} failed to read. Check the OCS error log for details.`,
+        );
+      } else if (failures > 0) {
         notifications.warning(
-          `Analyzed ${targets.length - failures} of ${targets.length} files — ${failures} failed.`,
+          `Loaded ${collected.length} record${collected.length === 1 ? '' : 's'} from ${targets.length - failures} file${targets.length - failures === 1 ? '' : 's'} — ${failures} failed.`,
+        );
+      } else if (collected.length === 0) {
+        notifications.info(
+          `Analyzed ${targets.length} file${targets.length === 1 ? '' : 's'}, but none contained records for the selected window.`,
         );
       } else {
         notifications.success(
@@ -208,7 +231,9 @@ export function useIpdrViewer(type: IpdrType) {
     // analyze
     records,
     analyzing,
+    analyzed,
     analyzeProgress,
     analyzeSelected,
+    lastRunSummary,
   };
 }

@@ -276,8 +276,30 @@ const selectAllLabel = computed(() =>
     </v-card>
 
     <v-card v-else variant="tonal">
-      <v-card-text class="text-center text-medium-emphasis py-8">
-        Select one or more files above and click <b>Analyze</b> to load records.
+      <v-card-text class="text-center py-8">
+        <template v-if="!v.analyzed.value">
+          <div class="text-medium-emphasis">
+            Select one or more files above and click <b>Analyze</b> to load records.
+          </div>
+        </template>
+        <template v-else-if="v.lastRunSummary.value.filesFailed > 0 && v.lastRunSummary.value.filesRead === 0">
+          <v-icon icon="mdi-alert-circle" color="error" size="32" class="mb-2" />
+          <div class="text-error">
+            All {{ v.lastRunSummary.value.filesFailed }} selected file{{ v.lastRunSummary.value.filesFailed === 1 ? '' : 's' }} failed to read.
+          </div>
+          <div class="text-caption text-medium-emphasis mt-1">
+            Check the OCS error log — typical causes are in-flight rotations or corrupted tails on old files.
+          </div>
+        </template>
+        <template v-else>
+          <v-icon icon="mdi-information-outline" size="32" class="mb-2" />
+          <div class="text-medium-emphasis">
+            Analyzed {{ v.lastRunSummary.value.filesRead }} file{{ v.lastRunSummary.value.filesRead === 1 ? '' : 's' }}, no records in the selected window.
+          </div>
+          <div v-if="v.lastRunSummary.value.filesFailed > 0" class="text-caption text-warning mt-1">
+            ({{ v.lastRunSummary.value.filesFailed }} file{{ v.lastRunSummary.value.filesFailed === 1 ? '' : 's' }} failed to read — see the OCS log.)
+          </div>
+        </template>
       </v-card-text>
     </v-card>
   </div>
