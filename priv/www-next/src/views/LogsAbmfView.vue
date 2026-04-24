@@ -64,7 +64,23 @@ const total = computed(
   () => logs.data.value?.contentRange?.total ?? logs.data.value?.total ?? 0,
 );
 
-/** Format a Quantity with units-aware rendering (cents→money, octets→bytes, …). */
+/**
+ * Format a Quantity from an ABMF event, with units-aware rendering.
+ *
+ * IMPORTANT: the ABMF event codec in SigScale OCS
+ * (ocs_rest_res_balance:abmf4/abmf5/abmf6) emits the raw internal
+ * integer without calling `millionths_out`. For cents that means the
+ * wire value is in MILLIONTHS of a cent (a 2000-cent top-up arrives
+ * as 2000000000), unlike the bucket codec (`quantity/2`) which does
+ * convert via `millionths_out` and yields a decimal string like "20".
+ *
+ * We adapt to what each codec actually sends:
+ *   - cents  → divide by 1_000_000 to land on cents, then by 100 to
+ *              land on the currency unit the `money()` formatter wants
+ *   - octets → raw byte count, passed to `bytes()`
+ *   - seconds → raw seconds, passed to `duration()`
+ *   - messages → raw count
+ */
 function fmtQuantity(q: Quantity | undefined): string {
   if (!q || q.amount == null) return '—';
   const raw = typeof q.amount === 'number'
@@ -73,7 +89,8 @@ function fmtQuantity(q: Quantity | undefined): string {
   if (!Number.isFinite(raw)) return String(q.amount);
   switch (q.units) {
     case 'cents':
-      return money(raw / 100);
+      // raw is in millionths of a cent; /1e6 → cents; /100 → dollars.
+      return money(raw / 100_000_000);
     case 'octets':
       return bytes(raw);
     case 'seconds':
