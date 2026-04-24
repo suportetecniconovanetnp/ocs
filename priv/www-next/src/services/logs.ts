@@ -1,4 +1,4 @@
-import { http, getList, rangeHeader, encodePath, type PagedResult } from './http';
+import { http, getList, rangeHeader, type PagedResult } from './http';
 import type { AbmfEvent, HttpEvent, Usage } from '@/types/tmf';
 
 const USAGE_BASE = '/usageManagement/v1/usage';
@@ -184,6 +184,18 @@ export const logsApi = {
    * `ocs_rest_res_usage:get_usages/4` with `Type=wlan|voip` and
    * `Id=<filename>`. Each record's fields live in
    * `usageCharacteristic` — the caller picks them out.
+   *
+   * IMPORTANT: the filename must go on the wire **un-encoded**. This
+   * mirrors the legacy `sig-ipdr-list-{wlan,voip}.js` behaviour
+   * (`ajax.url = "…/ipdr/wlan/" + event.model.item` — no encoder). The
+   * SigScale inets+mod_ocs_rest_get routing appears to mishandle the
+   * percent-encoded form (e.g. `%3A` for `:` in the ISO-8601 timestamp)
+   * and returns a generic 500 HTML from inets itself instead of a
+   * JSON 404/400 from the handler. We therefore DO NOT call
+   * `encodePath` on the filename — the chars that appear in practice
+   * (`-`, `:`, `.`, `T`, `Z`, digits) are all safe in URL path
+   * segments per RFC 3986 §3.3 (`pchar = unreserved / pct-encoded /
+   * sub-delims / ":" / "@"`).
    */
   ipdrRecords(
     type: IpdrType,
@@ -191,7 +203,7 @@ export const logsApi = {
     start = 0,
     end = 999,
   ): Promise<PagedResult<Usage>> {
-    return getList<Usage>(`${USAGE_BASE}/ipdr/${type}/${encodePath(file)}`, {
+    return getList<Usage>(`${USAGE_BASE}/ipdr/${type}/${file}`, {
       headers: rangeHeader(start, end),
     });
   },
