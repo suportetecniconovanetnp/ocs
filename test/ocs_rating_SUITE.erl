@@ -121,7 +121,10 @@ all() ->
 	refund_partially_used_reservation, tariff_prices,
 	allowance_bucket, tariff_bucket_voice,
 	tariff_bucket_iec, tariff_bucket_ecur,
-	scur_5g_data_initial].
+	scur_5g_data_initial,
+	rated_included_octets, rated_included_seconds, rated_included_messages,
+	rated_non_included_octets, rated_non_included_seconds, rated_non_included_messages,
+	rated_bundle_offer].
 
 %%---------------------------------------------------------------------
 %%  Test cases
@@ -194,7 +197,7 @@ initial_insufficient_multisession(_Config) ->
 	ServiceId = add_service(ProdRef),
 	RemAmount = PackagePrice,
 	B1 = bucket(cents, RemAmount),
-	BId = add_bucket(ProdRef, B1),
+	_BId = add_bucket(ProdRef, B1),
 	Protocol = protocol(),
 	ServiceType = service_type(Protocol, data),
 	SessionId1 = session_id(Protocol),
@@ -382,7 +385,7 @@ initial_ignore_expired_buckets(_Config) ->
 	ServiceType = service_type(Protocol, data),
 	{ok, #service{}, {PackageUnits, PackageSize}} = ocs_rating:rate(Protocol,
 			ServiceType, undefined, undefined, undefined, [ServiceId], Timestamp,
-			undefined, undefined, initial, [], [{PackageUnits, PackageSize}], SessionId2),
+			undefined, undefined, initial, [], [{PackageUnits, Reservation}], SessionId2),
 	ok = mnesia:sync_log(),
 	{ok, #bucket{remain_amount = RemAmount1}} = ocs:find_bucket(BId1).
 
@@ -775,7 +778,7 @@ interim_debit_remove_session(_Config) ->
 	DebitAmounts = [{PackageUnits, (PackageSize * 2) + rand:uniform(PackageSize)}],
 	{out_of_credit, _, _} = ocs_rating:rate(Protocol, ServiceType,
 			undefined, undefined, undefined, [ServiceId], Timestamp, undefined, undefined,
-			interim, [{PackageUnits, PackageSize}], [], SessionAttributes1),
+			interim, DebitAmounts, [], SessionAttributes1),
 	{ok, #service{session_attributes = []}} = ocs:find_service(ServiceId).
 
 interim_debit_and_reserve_available() ->
@@ -973,10 +976,10 @@ interim_debit_and_reserve_charging_key(_Config) ->
 	Timestamp = calendar:local_time(),
 	TS1 = calendar:datetime_to_gregorian_seconds(Timestamp),
 	SessionId = session_id(diameter),
-	{ok, _, {PackageUnits, G1}} = ocs_rating:rate(diameter,
+	{ok, _, {PackageUnits, _G1}} = ocs_rating:rate(diameter,
 			ServiceType, undefined, RatingGroup1, undefined, [ServiceId],
 			Timestamp, undefined, undefined, initial, [], [], SessionId),
-	{ok, _, {PackageUnits, G2}} = ocs_rating:rate(diameter,
+	{ok, _, {PackageUnits, _G2}} = ocs_rating:rate(diameter,
 			ServiceType, undefined, RatingGroup2, undefined, [ServiceId],
 			Timestamp, undefined, undefined, initial, [], [], SessionId),
 	RemAmount2 = RemAmount1 - (PackagePrice * 2),
@@ -992,12 +995,12 @@ interim_debit_and_reserve_charging_key(_Config) ->
 	2 = length(BucketList),
 	Debit1 = rand:uniform(PackageSize),
 	Debit2 = rand:uniform(PackageSize),
-	{ok, _, {PackageUnits, G3}} = ocs_rating:rate(diameter,
+	{ok, _, {PackageUnits, _G3}} = ocs_rating:rate(diameter,
 			ServiceType, undefined, RatingGroup1, undefined, [ServiceId],
 			calendar:gregorian_seconds_to_datetime(TS1 + 60),
 			undefined, undefined, interim, [{PackageUnits, Debit1}],
 			[], SessionId),
-	{ok, _, {PackageUnits, G4}} = ocs_rating:rate(diameter,
+	{ok, _, {PackageUnits, _G4}} = ocs_rating:rate(diameter,
 			ServiceType, undefined, RatingGroup2, undefined, [ServiceId],
 			calendar:gregorian_seconds_to_datetime(TS1 + 60),
 			undefined, undefined, interim, [{PackageUnits, Debit2}],
@@ -1048,7 +1051,7 @@ interim_out_of_credit_voice(_Config) ->
 	ServiceId = add_service(ProdRef),
 	StartingAmount = UnitPrice * 2,
 	B1 = bucket(cents, StartingAmount),
-	BId = add_bucket(ProdRef, B1),
+	_BId = add_bucket(ProdRef, B1),
 	Protocol = protocol(),
 	ServiceType = service_type(Protocol, voice),
 	Timestamp = calendar:local_time(),
@@ -1080,7 +1083,7 @@ interim_out_of_credit_negative(_Config) ->
 	ServiceId = add_service(ProdRef),
 	StartingAmount = UnitPrice + rand:uniform(UnitPrice - 1),
 	B1 = bucket(cents, StartingAmount),
-	BId = add_bucket(ProdRef, B1),
+	_BId = add_bucket(ProdRef, B1),
 	Protocol = protocol(),
 	ServiceType = service_type(Protocol, data),
 	Timestamp = calendar:local_time(),
@@ -1125,7 +1128,7 @@ interim_out_of_credit_negative1(_Config) ->
 	ServiceId = add_service(ProdRef),
 	StartingAmount = UnitPrice + rand:uniform(UnitPrice - 1),
 	B1 = bucket(cents, StartingAmount),
-	BId = add_bucket(ProdRef, B1),
+	_BId = add_bucket(ProdRef, B1),
 	Protocol = protocol(),
 	ServiceType = service_type(Protocol, data),
 	Timestamp = calendar:local_time(),
@@ -1900,7 +1903,7 @@ authorize_default_voice(_Config) ->
 	{ok, #bucket{remain_amount = StartingAmount}} = ocs:find_bucket(BId).
 
 authorize_data_1() ->
-	[{userdata, [{doc, "Athorize data access when price rated on seconds"}]}].
+	[{userdata, [{doc, "Authorize data access when price rated on seconds"}]}].
 
 authorize_data_1(_Config) ->
 	PackagePrice = 1000000,
@@ -1926,7 +1929,7 @@ authorize_data_1(_Config) ->
 	{ok, #bucket{remain_amount = RemAmount}} = ocs:find_bucket(BId).
 
 authorize_data_2() ->
-	[{userdata, [{doc, "Athorize data access when price rated on octets"}]}].
+	[{userdata, [{doc, "Authorize data access when price rated on octets"}]}].
 
 authorize_data_2(_Config) ->
 	PackagePrice = 1000000,
@@ -1951,7 +1954,7 @@ authorize_data_2(_Config) ->
 	{ok, #bucket{remain_amount = RemAmount}} = ocs:find_bucket(BId).
 
 authorize_data_with_partial_reservation() ->
-	[{userdata, [{doc, "Athorize data access when price "
+	[{userdata, [{doc, "Authorize data access when price "
 			"rated on seconds with partial reservation"}]}].
 
 authorize_data_with_partial_reservation(_Config) ->
@@ -2091,9 +2094,9 @@ debit_sms(_Config) ->
 		SessionId),
 	ok = mnesia:sync_log(),
 	{ok, #bucket{remain_amount = R1,
-			attributes = #{reservations := Rs1}}} = ocs:find_bucket(BId),
+			attributes = #{reservations := _Rs}}} = ocs:find_bucket(BId),
 	R1 = RemAmount - NumEvents,
-	{ok, _, Rated} = ocs_rating:rate(diameter, ServiceType, undefined,
+	{ok, _, _Rated} = ocs_rating:rate(diameter, ServiceType, undefined,
 			undefined, undefined, [ServiceId], Timestamp, undefined, undefined,
 			final, [{messages, NumEvents}], undefined,
 		SessionId),
@@ -2127,7 +2130,7 @@ iec_out_of_credit(_Config) ->
 roaming_table_data() ->
 	[{userdata, [{doc, "Data rating for roaming with prefix table"}]}].
 
-roaming_table_data(Config) ->
+roaming_table_data(_Config) ->
 	RoamingTable = ocs:generate_identity(),
 	ok = ocs_gtt:new(RoamingTable, [{disc_copies, [node()]}]),
 	F = fun F(0) ->
@@ -2195,7 +2198,7 @@ roaming_table_data(Config) ->
 roaming_table_voice() ->
 	[{userdata, [{doc, "Voice rating for roaming with prefix table"}]}].
 
-roaming_table_voice(Config) ->
+roaming_table_voice(_Config) ->
 	RoamingTable = ocs:generate_identity(),
 	ok = ocs_gtt:new(RoamingTable, [{disc_copies, [node()]}]),
 	DestinationTable = ocs:generate_identity(),
@@ -2289,7 +2292,7 @@ roaming_table_voice(Config) ->
 roaming_table_sms_ecur() ->
 	[{userdata, [{doc, "SMS ECUR rating for roaming with prefix table"}]}].
 
-roaming_table_sms_ecur(Config) ->
+roaming_table_sms_ecur(_Config) ->
 	RoamingTable = ocs:generate_identity(),
 	ok = ocs_gtt:new(RoamingTable, [{disc_copies, [node()]}]),
 	DestinationTable = ocs:generate_identity(),
@@ -2381,7 +2384,7 @@ roaming_table_sms_ecur(Config) ->
 roaming_table_sms_iec() ->
 	[{userdata, [{doc, "SMS IEC rating for roaming with prefix table"}]}].
 
-roaming_table_sms_iec(Config) ->
+roaming_table_sms_iec(_Config) ->
 	RoamingTable = ocs:generate_identity(),
 	ok = ocs_gtt:new(RoamingTable, [{disc_copies, [node()]}]),
 	DestinationTable = ocs:generate_identity(),
@@ -2455,7 +2458,7 @@ roaming_table_sms_iec(Config) ->
 roaming_table_sms_iec_rsu() ->
 	[{userdata, [{doc, "SMS IEC RSU rating for roaming with prefix table"}]}].
 
-roaming_table_sms_iec_rsu(Config) ->
+roaming_table_sms_iec_rsu(_Config) ->
 	RoamingTable = ocs:generate_identity(),
 	ok = ocs_gtt:new(RoamingTable, [{disc_copies, [node()]}]),
 	DestinationTable = ocs:generate_identity(),
@@ -2967,7 +2970,7 @@ tariff_bucket_voice(_Config) ->
 			Destination, originate, interim,
 			[{seconds, Debit3}], [{seconds, Reserve}], SessionId),
 	Debit4 = Reserve - UnitSize + rand:uniform(UnitSize),
-	{ok, _, Rated} = ocs_rating:rate(Protocol, ServiceType, undefined,
+	{ok, _, _Rated} = ocs_rating:rate(Protocol, ServiceType, undefined,
 			undefined, undefined, [ServiceId], calendar:local_time(),
 			Destination, originate, final,
 			[{seconds, Debit4}], undefined, SessionId),
@@ -3213,25 +3216,25 @@ tariff_bucket_ecur(_Config) ->
 	{ok, _, DebitUnits} = ocs_rating:rate(Protocol, ServiceType, undefined,
 			undefined, undefined, [ServiceId], calendar:local_time(),
 			Destination, originate, initial, [], [], SessionId),
-	{ok, _, _Rated} = ocs_rating:rate(Protocol, ServiceType, undefined,
+	{ok, _, _} = ocs_rating:rate(Protocol, ServiceType, undefined,
 			undefined, undefined, [ServiceId], calendar:local_time(),
 			Destination, originate, final, [], [], SessionId),
 	{ok, _, DebitUnits} = ocs_rating:rate(Protocol, ServiceType, undefined,
 			undefined, undefined, [ServiceId], calendar:local_time(),
 			Destination, originate, initial, [], [], SessionId),
-	{ok, _, _Rated} = ocs_rating:rate(Protocol, ServiceType, undefined,
+	{ok, _, _} = ocs_rating:rate(Protocol, ServiceType, undefined,
 			undefined, undefined, [ServiceId], calendar:local_time(),
 			Destination, originate, final, [], [], SessionId),
 	{ok, _, DebitUnits} = ocs_rating:rate(Protocol, ServiceType, undefined,
 			undefined, undefined, [ServiceId], calendar:local_time(),
 			Destination, originate, initial, [], [], SessionId),
-	{ok, _, _Rated} = ocs_rating:rate(Protocol, ServiceType, undefined,
+	{ok, _, _} = ocs_rating:rate(Protocol, ServiceType, undefined,
 			undefined, undefined, [ServiceId], calendar:local_time(),
 			Destination, originate, final, [], [], SessionId),
 	{ok, _, DebitUnits} = ocs_rating:rate(Protocol, ServiceType, undefined,
 			undefined, undefined, [ServiceId], calendar:local_time(),
 			Destination, originate, initial, [], [], SessionId),
-	{ok, _, _Rated} = ocs_rating:rate(Protocol, ServiceType, undefined,
+	{ok, _, _} = ocs_rating:rate(Protocol, ServiceType, undefined,
 			undefined, undefined, [ServiceId], calendar:local_time(),
 			Destination, originate, final, [], [], SessionId),
 	ok = mnesia:sync_log(),
@@ -3291,6 +3294,485 @@ scur_5g_data_initial(_Config) ->
 			attributes = #{bucket_type := normal}}} = ocs:find_bucket(BId),
 	RemAmount2 == RemAmount1 - PackagePrice.
 
+rated_included_octets() ->
+	[{userdata, [{doc, "Rated records: included octets"}]}].
+
+rated_included_octets(_Config) ->
+	{ok, MinReserve} = application:get_env(ocs, min_reserve_octets),
+	UnitSize = MinReserve + rand:uniform(MinReserve - 1),
+	UnitPrice = rand:uniform(1000000),
+	UnitType = octets,
+	PriceType = usage,
+	Price = price(PriceType, UnitType, UnitSize, UnitPrice),
+	PriceName = Price#price.name,
+	OfferName = add_offer([Price], 8),
+	ProdRef = add_product(OfferName),
+	ServiceId = add_service(ProdRef),
+	B1 = bucket(UnitType, rand:uniform(UnitSize)),
+	B2 = bucket(UnitType, UnitSize + rand:uniform(UnitSize)),
+	B3 = bucket(UnitType, UnitSize * 10),
+	_Bid1 = add_bucket(ProdRef, B1),
+	_Bid2 = add_bucket(ProdRef, B2),
+	_Bid3 = add_bucket(ProdRef, B3),
+	Protocol = protocol(),
+	ServiceType = service_type(Protocol, data),
+	Timestamp = calendar:local_time(),
+	TS = calendar:datetime_to_gregorian_seconds(Timestamp),
+	SessionId = session_id(Protocol),
+	{ok, _, _} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS),
+			undefined, undefined, initial, [], [], SessionId),
+	UsedUnits1 = UnitSize + rand:uniform(UnitSize div 2),
+	{ok, _, _} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 120),
+			undefined, undefined, interim, [{UnitType, UsedUnits1}],
+			[], SessionId),
+	UsedUnits2 = UnitSize + rand:uniform(UnitSize div 2),
+	{ok, _, _} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 180),
+			undefined, undefined, interim, [{UnitType, UsedUnits2}],
+			[], SessionId),
+	UsedUnits3 = rand:uniform(UnitSize),
+	{ok, _, Rated} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 240),
+			undefined, undefined, final,
+			[{UnitType, UsedUnits3}], undefined, SessionId),
+	UsedUnits = UsedUnits1 + UsedUnits2 + UsedUnits3,
+	[Included] = Rated,
+	#rated{bucket_value = UsedUnits, bucket_type = UnitType,
+			product = OfferName, price_name = PriceName,
+			price_type = PriceType, is_billed = true,
+			usage_rating_tag = included, _ = undefined} = Included.
+
+rated_included_seconds() ->
+	[{userdata, [{doc, "Rated records: included seconds"}]}].
+
+rated_included_seconds(_Config) ->
+	{ok, MinReserve} = application:get_env(ocs, min_reserve_seconds),
+	UnitSize = MinReserve + rand:uniform(MinReserve - 1),
+	UnitPrice = rand:uniform(1000000),
+	UnitType = seconds,
+	PriceType = usage,
+	Price = price(PriceType, UnitType, UnitSize, UnitPrice),
+	PriceName = Price#price.name,
+	OfferName = add_offer([Price], 9),
+	ProdRef = add_product(OfferName),
+	ServiceId = add_service(ProdRef),
+	B1 = bucket(UnitType, rand:uniform(UnitSize)),
+	B2 = bucket(UnitType, UnitSize + rand:uniform(UnitSize)),
+	B3 = bucket(UnitType, UnitSize * 10),
+	_Bid1 = add_bucket(ProdRef, B1),
+	_Bid2 = add_bucket(ProdRef, B2),
+	_Bid3 = add_bucket(ProdRef, B3),
+	Protocol = protocol(),
+	ServiceType = service_type(Protocol, voice),
+	Timestamp = calendar:local_time(),
+	TS = calendar:datetime_to_gregorian_seconds(Timestamp),
+	SessionId = session_id(Protocol),
+	{ok, _, _} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS),
+			undefined, undefined, initial, [], [], SessionId),
+	UsedUnits1 = UnitSize + rand:uniform(UnitSize div 2),
+	{ok, _, _} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 120),
+			undefined, undefined, interim, [{UnitType, UsedUnits1}],
+			[], SessionId),
+	UsedUnits2 = UnitSize + rand:uniform(UnitSize div 2),
+	{ok, _, _} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 180),
+			undefined, undefined, interim, [{UnitType, UsedUnits2}],
+			[], SessionId),
+	UsedUnits3 = rand:uniform(UnitSize),
+	{ok, _, Rated} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 240),
+			undefined, undefined, final,
+			[{UnitType, UsedUnits3}], undefined, SessionId),
+	UsedUnits = UsedUnits1 + UsedUnits2 + UsedUnits3,
+	[Included] = Rated,
+	#rated{bucket_value = UsedUnits, bucket_type = UnitType,
+			product = OfferName, price_name = PriceName,
+			price_type = PriceType, is_billed = true,
+			usage_rating_tag = included, _ = undefined} = Included.
+
+rated_included_messages() ->
+	[{userdata, [{doc, "Rated records: included messages"}]}].
+
+rated_included_messages(_Config) ->
+	{ok, UnitSize} = application:get_env(ocs, min_reserve_messages),
+	UnitPrice = rand:uniform(1000000),
+	UnitType = messages,
+	PriceType = usage,
+	Price = price(PriceType, UnitType, UnitSize, UnitPrice),
+	PriceName = Price#price.name,
+	OfferName = add_offer([Price], 11),
+	ProdRef = add_product(OfferName),
+	ServiceId = add_service(ProdRef),
+	B1 = bucket(UnitType, UnitSize),
+	B2 = bucket(UnitType, UnitSize),
+	B3 = bucket(UnitType, UnitSize * 10),
+	_Bid1 = add_bucket(ProdRef, B1),
+	_Bid2 = add_bucket(ProdRef, B2),
+	_Bid3 = add_bucket(ProdRef, B3),
+	Protocol = protocol(),
+	ServiceType = service_type(Protocol, message),
+	Timestamp = calendar:local_time(),
+	TS = calendar:datetime_to_gregorian_seconds(Timestamp),
+	SessionId = session_id(Protocol),
+	{ok, _, GrantedAmount, Rated} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS),
+			undefined, undefined, event, [], [], SessionId),
+	{UnitType, UsedUnits} = GrantedAmount,
+	[Included] = Rated,
+	#rated{bucket_value = UsedUnits, bucket_type = UnitType,
+			product = OfferName, price_name = PriceName,
+			price_type = PriceType, is_billed = true,
+			usage_rating_tag = included, _ = undefined} = Included.
+
+rated_non_included_octets() ->
+	[{userdata, [{doc, "Rated records: non included octets"}]}].
+
+rated_non_included_octets(_Config) ->
+	{ok, MinReserve} = application:get_env(ocs, min_reserve_octets),
+	UnitSize = MinReserve + rand:uniform(MinReserve - 1),
+	UnitPrice = rand:uniform(1000000),
+	UnitType = octets,
+	PriceType = usage,
+	Price = price(PriceType, UnitType, UnitSize, UnitPrice),
+	PriceName = Price#price.name,
+	OfferName = add_offer([Price], 8),
+	ProdRef = add_product(OfferName),
+	ServiceId = add_service(ProdRef),
+	B1 = bucket(cents, rand:uniform(UnitPrice div 2)),
+	B2 = bucket(cents, rand:uniform(UnitPrice div 2)),
+	B3 = bucket(cents, UnitPrice * 10),
+	_BId1 = add_bucket(ProdRef, B1),
+	_BId2 = add_bucket(ProdRef, B2),
+	_BId3 = add_bucket(ProdRef, B3),
+	Protocol = protocol(),
+	ServiceType = service_type(Protocol, data),
+	Timestamp = calendar:local_time(),
+	TS = calendar:datetime_to_gregorian_seconds(Timestamp),
+	SessionId = session_id(Protocol),
+	{ok, _, _} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS),
+			undefined, undefined, initial, [], [], SessionId),
+	UsedUnits1 = UnitSize + rand:uniform(UnitSize div 2),
+	{ok, _, _} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 120),
+			undefined, undefined, interim, [{UnitType, UsedUnits1}],
+			[], SessionId),
+	UsedUnits2 = UnitSize + rand:uniform(UnitSize div 2),
+	{ok, _, _} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 180),
+			undefined, undefined, interim, [{UnitType, UsedUnits2}],
+			[], SessionId),
+	UsedUnits3 = rand:uniform(UnitSize),
+	{ok, _, Rated} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 240),
+			undefined, undefined, final,
+			[{UnitType, UsedUnits3}], undefined, SessionId),
+	UsedUnits = UsedUnits1 + UsedUnits2 + UsedUnits3,
+	Amount = case UsedUnits rem UnitSize of
+		0 ->
+			(UsedUnits div UnitSize) * UnitPrice;
+		_ ->
+			((UsedUnits div UnitSize) + 1) * UnitPrice
+	end,
+	RA = (B1#bucket.remain_amount + B2#bucket.remain_amount
+			+ B3#bucket.remain_amount) - Amount,
+	Buckets = ocs:get_buckets(ProdRef),
+	ok = validate_balance(RA, Buckets),
+	[Included, NonIncluded] = Rated,
+	#rated{bucket_value = UsedUnits, bucket_type = UnitType,
+			product = OfferName, price_name = PriceName,
+			price_type = PriceType, is_billed = true,
+			usage_rating_tag = included, _ = undefined} = Included,
+	#rated{bucket_value = Amount, bucket_type = cents,
+			product = OfferName, price_name = PriceName,
+			price_type = PriceType, is_billed = true,
+			tax_excluded_amount = Amount,
+			usage_rating_tag = non_included, _ = undefined} = NonIncluded.
+
+rated_non_included_seconds() ->
+	[{userdata, [{doc, "Rated records: non_included seconds"}]}].
+
+rated_non_included_seconds(_Config) ->
+	{ok, MinReserve} = application:get_env(ocs, min_reserve_seconds),
+	UnitSize = MinReserve + rand:uniform(MinReserve - 1),
+	UnitPrice = rand:uniform(1000000),
+	UnitType = seconds,
+	PriceType = usage,
+	Price = price(PriceType, UnitType, UnitSize, UnitPrice),
+	PriceName = Price#price.name,
+	OfferName = add_offer([Price], 9),
+	ProdRef = add_product(OfferName),
+	ServiceId = add_service(ProdRef),
+	B1 = bucket(cents, rand:uniform(UnitPrice div 2)),
+	B2 = bucket(cents, rand:uniform(UnitPrice div 2)),
+	B3 = bucket(cents, UnitPrice * 10),
+	_BId1 = add_bucket(ProdRef, B1),
+	_BId2 = add_bucket(ProdRef, B2),
+	_BId3 = add_bucket(ProdRef, B3),
+	Protocol = protocol(),
+	ServiceType = service_type(Protocol, voice),
+	Timestamp = calendar:local_time(),
+	TS = calendar:datetime_to_gregorian_seconds(Timestamp),
+	SessionId = session_id(Protocol),
+	{ok, _, _} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS),
+			undefined, undefined, initial, [], [], SessionId),
+	UsedUnits1 = UnitSize + rand:uniform(UnitSize div 2),
+	{ok, _, _} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 120),
+			undefined, undefined, interim, [{UnitType, UsedUnits1}],
+			[], SessionId),
+	UsedUnits2 = UnitSize + rand:uniform(UnitSize div 2),
+	{ok, _, _} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 180),
+			undefined, undefined, interim, [{UnitType, UsedUnits2}],
+			[], SessionId),
+	UsedUnits3 = rand:uniform(UnitSize),
+	{ok, _, Rated} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 240),
+			undefined, undefined, final,
+			[{UnitType, UsedUnits3}], undefined, SessionId),
+	UsedUnits = UsedUnits1 + UsedUnits2 + UsedUnits3,
+	Amount = case UsedUnits rem UnitSize of
+		0 ->
+			(UsedUnits div UnitSize) * UnitPrice;
+		_ ->
+			((UsedUnits div UnitSize) + 1) * UnitPrice
+	end,
+	RA = (B1#bucket.remain_amount + B2#bucket.remain_amount
+			+ B3#bucket.remain_amount) - Amount,
+	Buckets = ocs:get_buckets(ProdRef),
+	ok = validate_balance(RA, Buckets),
+	[NonIncluded, Included] = Rated,
+	#rated{bucket_value = UsedUnits, bucket_type = UnitType,
+			product = OfferName, price_name = PriceName,
+			price_type = PriceType, is_billed = true,
+			usage_rating_tag = included, _ = undefined} = Included,
+	#rated{bucket_value = Amount, bucket_type = cents,
+			product = OfferName, price_name = PriceName,
+			price_type = PriceType, is_billed = true,
+			tax_excluded_amount = Amount,
+			usage_rating_tag = non_included, _ = undefined} = NonIncluded.
+
+rated_non_included_messages() ->
+	[{userdata, [{doc, "Rated records: non included messages"}]}].
+
+rated_non_included_messages(_Config) ->
+	{ok, UnitSize} = application:get_env(ocs, min_reserve_messages),
+	UnitPrice = rand:uniform(1000000),
+	UnitType = messages,
+	PriceType = usage,
+	Price = price(PriceType, UnitType, UnitSize, UnitPrice),
+	PriceName = Price#price.name,
+	OfferName = add_offer([Price], 11),
+	ProdRef = add_product(OfferName),
+	ServiceId = add_service(ProdRef),
+	B1 = bucket(cents, rand:uniform(UnitPrice div 2)),
+	B2 = bucket(cents, rand:uniform(UnitPrice div 2)),
+	B3 = bucket(cents, UnitPrice * 10),
+	_BId1 = add_bucket(ProdRef, B1),
+	_BId2 = add_bucket(ProdRef, B2),
+	_BId3 = add_bucket(ProdRef, B3),
+	Protocol = protocol(),
+	ServiceType = service_type(Protocol, message),
+	Timestamp = calendar:local_time(),
+	TS = calendar:datetime_to_gregorian_seconds(Timestamp),
+	SessionId = session_id(Protocol),
+	{ok, _, GrantedAmount, Rated} = ocs_rating:rate(Protocol, ServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS),
+			undefined, undefined, event, [], [], SessionId),
+	{UnitType, UsedUnits} = GrantedAmount,
+	Amount = UsedUnits * UnitPrice,
+	RA = (B1#bucket.remain_amount + B2#bucket.remain_amount
+			+ B3#bucket.remain_amount) - Amount,
+	Buckets = ocs:get_buckets(ProdRef),
+	ok = validate_balance(RA, Buckets),
+	[NonIncluded, Included] = Rated,
+	#rated{bucket_value = UsedUnits, bucket_type = UnitType,
+			product = OfferName, price_name = PriceName,
+			price_type = PriceType, is_billed = true,
+			usage_rating_tag = included, _ = undefined} = Included,
+	#rated{bucket_value = Amount, bucket_type = cents,
+			product = OfferName, price_name = PriceName,
+			price_type = PriceType, is_billed = true,
+			tax_excluded_amount = Amount,
+			usage_rating_tag = non_included, _ = undefined} = NonIncluded.
+
+rated_bundle_offer() ->
+	[{userdata, [{doc, "Rated records: Product Offering bundle"}]}].
+
+rated_bundle_offer(_Config) ->
+	{ok, PSMinReserve} = application:get_env(ocs, min_reserve_octets),
+	{ok, VCSMinReserve} = application:get_env(ocs, min_reserve_seconds),
+	{ok, SMSMinReserve} = application:get_env(ocs, min_reserve_messages),
+	PSUnitSize = PSMinReserve + rand:uniform(PSMinReserve - 1),
+	VCSUnitSize = VCSMinReserve + rand:uniform(VCSMinReserve - 1),
+	SMSUnitSize = SMSMinReserve,
+	PSUnitPrice = rand:uniform(1000000),
+	VCSUnitPrice = rand:uniform(1000000),
+	SMSUnitPrice = rand:uniform(1000000),
+	PSUnitType = octets,
+	VCSUnitType = seconds,
+	SMSUnitType = messages,
+	PriceType = usage,
+	PSPrice = price(PriceType, PSUnitType, PSUnitSize, PSUnitPrice),
+	VCSPrice = price(PriceType, VCSUnitType, VCSUnitSize, VCSUnitPrice),
+	SMSPrice = price(PriceType, SMSUnitType, SMSUnitSize, SMSUnitPrice),
+	PSPriceName = PSPrice#price.name,
+	VCSPriceName = VCSPrice#price.name,
+	SMSPriceName = SMSPrice#price.name,
+	PSOfferName = add_offer([PSPrice], 8),
+	VCSOfferName = add_offer([VCSPrice], 9),
+	SMSOfferName = add_offer([SMSPrice], 11),
+	BundleOffer = #offer{name = ocs:generate_identity(),
+			bundle = [#bundled_po{name = PSOfferName},
+					#bundled_po{name = VCSOfferName},
+					#bundled_po{name = SMSOfferName}]},
+	{ok, #offer{name = OfferId}} = ocs:add_offer(BundleOffer),
+	ProdRef = add_product(OfferId),
+	ServiceId = add_service(ProdRef),
+	B1 = bucket(cents, rand:uniform(PSUnitPrice div 2)),
+	B2 = bucket(cents, rand:uniform(PSUnitPrice div 2)),
+	B3 = bucket(cents, (PSUnitPrice * 10)
+			+ (VCSUnitPrice * 10) + (SMSUnitPrice * 10)),
+	_BId1 = add_bucket(ProdRef, B1),
+	_BId2 = add_bucket(ProdRef, B2),
+	_BId3 = add_bucket(ProdRef, B3),
+	Protocol = diameter,
+	PSServiceType = 32251,
+	VCSServiceType = 32276,
+	SMSServiceType = 32274,
+	Timestamp = calendar:local_time(),
+	TS = calendar:datetime_to_gregorian_seconds(Timestamp),
+	PSSessionId = session_id(Protocol),
+	VCSSessionId = session_id(Protocol),
+	SMSSessionId = session_id(Protocol),
+	{ok, _, _} = ocs_rating:rate(Protocol, PSServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS),
+			undefined, undefined, initial, [], [], PSSessionId),
+	{ok, _, _} = ocs_rating:rate(Protocol, VCSServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 10),
+			undefined, undefined, initial, [], [], VCSSessionId),
+	{ok, _, _} = ocs_rating:rate(Protocol, SMSServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 20),
+			undefined, undefined, initial, [], [], SMSSessionId),
+	PSUsedUnits1 = PSUnitSize + rand:uniform(PSUnitSize div 2),
+	{ok, _, _} = ocs_rating:rate(Protocol, PSServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 120),
+			undefined, undefined, interim, [{PSUnitType, PSUsedUnits1}],
+			[], PSSessionId),
+	VCSUsedUnits1 = VCSUnitSize + rand:uniform(VCSUnitSize div 2),
+	{ok, _, _} = ocs_rating:rate(Protocol, VCSServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 140),
+			undefined, undefined, interim, [{VCSUnitType, VCSUsedUnits1}],
+			[], VCSSessionId),
+	PSUsedUnits2 = PSUnitSize + rand:uniform(PSUnitSize div 2),
+	{ok, _, _} = ocs_rating:rate(Protocol, PSServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 180),
+			undefined, undefined, interim, [{PSUnitType, PSUsedUnits2}],
+			[], PSSessionId),
+	VCSUsedUnits2 = VCSUnitSize + rand:uniform(VCSUnitSize div 2),
+	{ok, _, _} = ocs_rating:rate(Protocol, VCSServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 200),
+			undefined, undefined, interim, [{VCSUnitType, VCSUsedUnits2}],
+			[], VCSSessionId),
+	PSUsedUnits3 = rand:uniform(PSUnitSize),
+	{ok, _, PSRated} = ocs_rating:rate(Protocol, PSServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 240),
+			undefined, undefined, final,
+			[{PSUnitType, PSUsedUnits3}], undefined, PSSessionId),
+	VCSUsedUnits3 = rand:uniform(VCSUnitSize),
+	{ok, _, VCSRated} = ocs_rating:rate(Protocol, VCSServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 260),
+			undefined, undefined, final,
+			[{VCSUnitType, VCSUsedUnits3}], undefined, VCSSessionId),
+	SMSUsedUnits = SMSUnitSize,
+	{ok, _, SMSRated} = ocs_rating:rate(Protocol, SMSServiceType,
+			undefined, undefined, undefined, [ServiceId],
+			calendar:gregorian_seconds_to_datetime(TS + 280),
+			undefined, undefined, final,
+			[{SMSUnitType, SMSUsedUnits}], undefined, SMSSessionId),
+	PSUsedUnits = PSUsedUnits1 + PSUsedUnits2 + PSUsedUnits3,
+	VCSUsedUnits = VCSUsedUnits1 + VCSUsedUnits2 + VCSUsedUnits3,
+	PSAmount = case PSUsedUnits rem PSUnitSize of
+		0 ->
+			(PSUsedUnits div PSUnitSize) * PSUnitPrice;
+		_ ->
+			((PSUsedUnits div PSUnitSize) + 1) * PSUnitPrice
+	end,
+	VCSAmount = case VCSUsedUnits rem VCSUnitSize of
+		0 ->
+			(VCSUsedUnits div VCSUnitSize) * VCSUnitPrice;
+		_ ->
+			((VCSUsedUnits div VCSUnitSize) + 1) * VCSUnitPrice
+	end,
+	SMSAmount = SMSUsedUnits * SMSUnitPrice,
+	RA = (B1#bucket.remain_amount + B2#bucket.remain_amount
+			+ B3#bucket.remain_amount) - PSAmount - VCSAmount - SMSAmount,
+	Buckets = ocs:get_buckets(ProdRef),
+	ok = validate_balance(RA, Buckets),
+	[PSIncluded, PSNonIncluded] = PSRated,
+	#rated{bucket_value = PSUsedUnits, bucket_type = PSUnitType,
+			product = PSOfferName, price_name = PSPriceName,
+			price_type = PSPriceType, is_billed = true,
+			usage_rating_tag = included, _ = undefined} = PSIncluded,
+	#rated{bucket_value = PSAmount, bucket_type = cents,
+			product = PSOfferName, price_name = PSPriceName,
+			price_type = PSPriceType, is_billed = true,
+			tax_excluded_amount = PSAmount,
+			usage_rating_tag = non_included, _ = undefined} = PSNonIncluded,
+	[VCSNonIncluded, VCSIncluded] = VCSRated,
+	#rated{bucket_value = VCSUsedUnits, bucket_type = VCSUnitType,
+			product = VCSOfferName, price_name = VCSPriceName,
+			price_type = VCSPriceType, is_billed = true,
+			usage_rating_tag = included, _ = undefined} = VCSIncluded,
+	#rated{bucket_value = VCSAmount, bucket_type = cents,
+			product = VCSOfferName, price_name = VCSPriceName,
+			price_type = VCSPriceType, is_billed = true,
+			tax_excluded_amount = VCSAmount,
+			usage_rating_tag = non_included, _ = undefined} = VCSNonIncluded,
+	[SMSNonIncluded, SMSIncluded] = SMSRated,
+	#rated{bucket_value = SMSUsedUnits, bucket_type = SMSUnitType,
+			product = SMSOfferName, price_name = SMSPriceName,
+			price_type = SMSPriceType, is_billed = true,
+			usage_rating_tag = included, _ = undefined} = SMSIncluded,
+	#rated{bucket_value = SMSAmount, bucket_type = cents,
+			product = SMSOfferName, price_name = SMSPriceName,
+			price_type = SMSPriceType, is_billed = true,
+			tax_excluded_amount = SMSAmount,
+			usage_rating_tag = non_included, _ = undefined} = SMSNonIncluded.
+
 %%---------------------------------------------------------------------
 %%  Internal functions
 %%---------------------------------------------------------------------
@@ -3332,7 +3814,8 @@ add_offer(Prices, Spec) when is_integer(Spec) ->
 	add_offer(Prices, integer_to_list(Spec));
 add_offer(Prices, Spec) ->
 	Offer = #offer{name = ocs:generate_identity(),
-	price = Prices, specification = Spec},
+			price = Prices,
+			specification = Spec},
 	{ok, #offer{name = OfferId}} = ocs:add_offer(Offer),
 	OfferId.
 %% @hidden
@@ -3340,7 +3823,9 @@ add_offer(Prices, Spec, CharValueUse) when is_integer(Spec) ->
 	add_offer(Prices, integer_to_list(Spec), CharValueUse);
 add_offer(Prices, Spec, CharValueUse) ->
 	Offer = #offer{name = ocs:generate_identity(),
-	price = Prices, specification = Spec, char_value_use = CharValueUse},
+			price = Prices,
+			specification = Spec,
+			char_value_use = CharValueUse},
 	{ok, #offer{name = OfferId}} = ocs:add_offer(Offer),
 	OfferId.
 
@@ -3422,4 +3907,22 @@ session_id(nrf) ->
 	N = erlang:unique_integer([positive]),
 	RatingDataRef = integer_to_list(TS) ++ integer_to_list(N),
 	[{nrf_ref, RatingDataRef}].
+
+validate_balance(Amount, Buckets) ->
+	F = fun(#bucket{attributes = #{bucket_type := normal}}) ->
+				true;
+			(#bucket{attributes = #{bucket_type := session}}) ->
+				false
+	end,
+	validate_balance1(Amount, Buckets, lists:all(F, Buckets)).
+validate_balance1(Amount, Buckets, true) ->
+	validate_balance2(Amount, Buckets);
+validate_balance1(_Amount, _Buckets, false) ->
+	ct:fail(session_bucket).
+validate_balance2(Amount, [#bucket{remain_amount = Amount}]) ->
+	ok;
+validate_balance2(Amount, [#bucket{remain_amount = RA} | T]) ->
+	validate_balance2(Amount - RA, T);
+validate_balance2(_Amount, []) ->
+	ct:fail(remain_amount).
 
