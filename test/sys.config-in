@@ -50,4 +50,5 @@
                   [{certfile, "%CERT_DIR%/cert.pem"},
                   {keyfile, "%CERT_DIR%/key.pem"}]}},
             {server_root, "%SERVER_ROOT%"},
-            {document_root, "%APP_PRIV%/www"}]}]}]}].
+            {alias, {"/legacy", "%APP_PRIV%/www"}},
+            {document_root, "%APP_PRIV%/www-next/dist"}]}]}]}].

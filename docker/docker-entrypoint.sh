@@ -261,9 +261,10 @@ render_sys_config() {
             {server_root, "./"},
             {alias, {"/doc", "lib/${rel}/doc"}},
             {alias, {"/schema", "lib/${rel}/priv/schema"}},
+            {alias, {"/legacy", "lib/${rel}/priv/www"}},
             {alias, {"/.well-known/api-catalog",
                   "lib/${rel}/priv/schema/api-catalog.linkset.jsonld"}},
-            {document_root, "lib/${rel}/priv/www"}]}]}]}].
+            {document_root, "lib/${rel}/priv/www-next"}]}]}]}].
 EOF
 }
 

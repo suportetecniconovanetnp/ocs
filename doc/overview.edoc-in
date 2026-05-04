@@ -976,6 +976,7 @@ following environment variables:
                   {keyfile, "/etc/ssl/private/ocs.pem"}]}},
             {server_root, "/home/ocs"},
             {alias, {"/doc", "/usr/lib/erlang/lib/ocs-%VERSION%/doc"}},
-            {document_root, "/usr/lib/erlang/lib/ocs-%VERSION%/priv/www"}]}]}]}].
+            {alias, {"/legacy", "/usr/lib/erlang/lib/ocs-%VERSION%/priv/www"}},
+            {document_root, "/usr/lib/erlang/lib/ocs-%VERSION%/priv/www-next"}]}]}]}].
 
 '''

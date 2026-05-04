@@ -8,7 +8,7 @@
 wwwnextdir = $(wwwdir)-next
 
 EXTRA_DIST = package.json vite.config.ts tsconfig.json tsconfig.node.json \
-		eslint.config.js .prettierrc.json index.html \
+		eslint.config.js .prettierrc.json index.html public \
 		src locales tests playwright.config.ts
 
 if BUILD_WWW_NEXT
@@ -20,7 +20,8 @@ node_modules/.install-stamp: package.json
 	touch $@
 
 dist/index.html: node_modules/.install-stamp $(shell find $(srcdir)/src -type f) \
-		$(shell find $(srcdir)/locales -type f) index.html vite.config.ts
+		$(shell find $(srcdir)/locales -type f) \
+		$(shell find $(srcdir)/public -type f) index.html vite.config.ts
 	npm run build
 
 check-local:

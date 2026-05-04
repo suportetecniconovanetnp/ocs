@@ -22,8 +22,8 @@ AC_ARG_WITH([ssl],
 		[AS_HELP_STRING([--with-ssl=PATH], [specify location of OpenSSL include and lib])])
 AC_ARG_ENABLE([www-next],
 		[AS_HELP_STRING([--enable-www-next],
-				[build the modernised Vue 3 web UI in priv/www-next (default is no)])],
-		[enable_www_next=$enableval], [enable_www_next=no])
+				[build the modernised Vue 3 web UI in priv/www-next (default is yes)])],
+		[enable_www_next=$enableval], [enable_www_next=yes])
 AM_CONDITIONAL([BUILD_WWW_NEXT], [test "x$enable_www_next" = "xyes"])
 CFLAGS="${CFLAGS} -Wall"
 PKG_PROG_PKG_CONFIG
@@ -172,4 +172,3 @@ AC_OUTPUT([Makefile include/Makefile src/Makefile ebin/Makefile doc/Makefile
 		priv/schema/Makefile test/Makefile
 		sys.config $PACKAGE_NAME.rel ebin/$PACKAGE_NAME.appup
 		scripts/$PACKAGE_NAME scripts/$PACKAGE_NAME.service])
-

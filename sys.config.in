@@ -76,6 +76,7 @@
             {server_root, "./"},
             {alias, {"/doc", "lib/@PACKAGE@-@VERSION@/doc"}},
             {alias, {"/schema", "lib/@PACKAGE@-@VERSION@/priv/schema"}},
+            {alias, {"/legacy", "lib/@PACKAGE@-@VERSION@/priv/www"}},
             {alias, {"/.well-known/api-catalog",
                   "lib/@PACKAGE@-@VERSION@/priv/schema/api-catalog.linkset.jsonld"}},
-            {document_root, "lib/@PACKAGE@-@VERSION@/priv/www"}]}]}]}].
+            {document_root, "lib/@PACKAGE@-@VERSION@/priv/www-next"}]}]}]}].
