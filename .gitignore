@@ -29,3 +29,5 @@ priv/www/src/sig-help.js
 .env
 data/
 
+# Local IDE metadata
+.idea/
