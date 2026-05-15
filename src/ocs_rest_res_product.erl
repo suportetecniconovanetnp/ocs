@@ -751,7 +751,8 @@ patch_product(ProdId, Etag, RequestBody) ->
 %% @doc Respond to `DELETE /productCatalogManagement/v2/productOffering/{id}'
 %% 	request to remove a `Product Offering'.
 delete_offer(Id) ->
-	try ocs:delete_offer(Id) of
+	OfferId = decode_identity(Id),
+	try ocs:delete_offer(OfferId) of
 		ok ->
 			{ok, [], []}
 	catch
@@ -770,6 +771,15 @@ delete_offer(Id) ->
 					title => "Internal Server Error",
 					detail => "Exception occurred deleting Product Offering"},
 			{error, 500, Problem}
+	end.
+
+%% @hidden
+decode_identity(Id) when is_list(Id) ->
+	case erlang:function_exported(uri_string, percent_decode, 1) of
+		true ->
+			uri_string:percent_decode(Id);
+		false ->
+			Id
 	end.
 
 -spec delete_product(Id) -> Result
@@ -2596,4 +2606,3 @@ pla_ref([{"refType", Type} | T], Acc) ->
 	pla_ref(T, Acc#pla_ref{ref_type = Type});
 pla_ref([], Acc) ->
 	Acc.
-
