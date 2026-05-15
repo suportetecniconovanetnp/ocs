@@ -164,7 +164,7 @@ async function save() {
   try {
     const payload = buildOfferingPayload(form.value);
     const result = props.offering
-      ? await catalogApi.updateOffering(props.offering.id, payload)
+      ? await catalogApi.updateOffering(props.offering, payload)
       : await catalogApi.createOffering(payload);
     notifications.success(props.offering ? 'Offering updated.' : 'Offering created.');
     emit('saved', result);

@@ -15,6 +15,11 @@ export function normalizeOffering(offering: ProductOffering): ProductOffering {
   return { ...offering, id };
 }
 
+function offeringResourcePath(offering: Pick<ProductOffering, 'id' | 'href'> | string): string {
+  if (typeof offering === 'string') return `${BASE}/productOffering/${enc(offering)}`;
+  return offering.href ?? `${BASE}/productOffering/${enc(offering.id)}`;
+}
+
 export const catalogApi = {
   async listOfferings(start = 0, end = 49): Promise<PagedResult<ProductOffering>> {
     const result = await getList<ProductOffering>(`${BASE}/productOffering`, {
@@ -56,14 +61,17 @@ export const catalogApi = {
       .post<ProductOffering>(`${BASE}/productOffering`, payload)
       .then((r) => normalizeOffering(r.data));
   },
-  updateOffering(id: string, patch: Partial<ProductOffering>): Promise<ProductOffering> {
+  updateOffering(
+    offering: Pick<ProductOffering, 'id' | 'href'> | string,
+    patch: Partial<ProductOffering>,
+  ): Promise<ProductOffering> {
     return http
-      .patch<ProductOffering>(`${BASE}/productOffering/${enc(id)}`, patch, {
+      .patch<ProductOffering>(offeringResourcePath(offering), patch, {
         headers: { 'Content-Type': 'application/merge-patch+json' },
       })
       .then((r) => normalizeOffering(r.data));
   },
-  deleteOffering(id: string): Promise<void> {
-    return http.delete(`${BASE}/productOffering/${enc(id)}`).then(() => undefined);
+  deleteOffering(offering: Pick<ProductOffering, 'id' | 'href'> | string): Promise<void> {
+    return http.delete(offeringResourcePath(offering)).then(() => undefined);
   },
 };

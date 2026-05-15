@@ -59,7 +59,7 @@ async function remove(item: ProductOffering) {
   const ok = await confirmDialog.value?.ask();
   if (!ok) return;
   try {
-    await catalogApi.deleteOffering(item.id);
+    await catalogApi.deleteOffering(item);
     notifications.success('Offering deleted.');
     void offerings.reload();
   } catch {

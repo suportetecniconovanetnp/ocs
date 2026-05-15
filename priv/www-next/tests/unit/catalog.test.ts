@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import { normalizeOffering } from '@/services/catalog';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { catalogApi, normalizeOffering } from '@/services/catalog';
+import { http } from '@/services/http';
 import type { ProductOffering } from '@/types/tmf';
 
 describe('normalizeOffering', () => {
@@ -21,5 +22,24 @@ describe('normalizeOffering', () => {
     } as ProductOffering);
 
     expect(offering.id).toBe('Voice & Data (1G)');
+  });
+});
+
+describe('catalogApi resource routing', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('uses the API-provided href when deleting an offering', async () => {
+    const del = vi.spyOn(http, 'delete').mockResolvedValue({} as never);
+
+    await catalogApi.deleteOffering({
+      id: 'NOVATEL TURBO 17GB',
+      href: '/productCatalogManagement/v2/productOffering/NOVATEL TURBO 17GB',
+    });
+
+    expect(del).toHaveBeenCalledWith(
+      '/productCatalogManagement/v2/productOffering/NOVATEL TURBO 17GB',
+    );
   });
 });
