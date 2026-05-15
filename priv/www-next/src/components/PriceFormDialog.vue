@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref, toRaw, watch } from 'vue';
 import {
   emptyPrice,
   type PriceForm,
@@ -93,7 +93,7 @@ const alterationItems = computed(() => [
 
 function show(price?: PriceForm, index: number | null = null) {
   editingIndex.value = index;
-  form.value = price ? structuredClone(price) : emptyPrice();
+  form.value = price ? structuredClone(toRaw(price)) : emptyPrice();
   showCharacteristics.value = Boolean(
     form.value.prefixTariff ||
       form.value.roamingTable ||
@@ -109,7 +109,7 @@ function show(price?: PriceForm, index: number | null = null) {
 }
 
 function save() {
-  emit('saved', { price: form.value, index: editingIndex.value });
+  emit('saved', { price: structuredClone(toRaw(form.value)), index: editingIndex.value });
   open.value = false;
 }
 

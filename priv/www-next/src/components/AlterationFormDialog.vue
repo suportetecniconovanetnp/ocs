@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref, toRaw, watch } from 'vue';
 import {
   emptyAlteration,
   type PriceAlterationForm,
@@ -60,13 +60,16 @@ watch(
 
 function show(alteration?: PriceAlterationForm, index: number | null = null) {
   editingIndex.value = index;
-  form.value = alteration ? structuredClone(alteration) : emptyAlteration();
+  form.value = alteration ? structuredClone(toRaw(alteration)) : emptyAlteration();
   open.value = true;
 }
 
 function save() {
   if (!form.value.name) return;
-  emit('saved', { alteration: form.value, index: editingIndex.value });
+  emit('saved', {
+    alteration: structuredClone(toRaw(form.value)),
+    index: editingIndex.value,
+  });
   open.value = false;
 }
 
