@@ -23,7 +23,7 @@
 
 -export([content_types_accepted/0, content_types_provided/0]).
 -export([add_offer/1, add_product/1]).
--export([get_offer/1, get_offers/2, patch_offer/3, get_product/1,
+-export([get_offer/1, get_offers/2, patch_offer/3, merge_patch_offer/3, get_product/1,
 		get_products/2, patch_product/3]).
 -export([sync_offer/1]).
 -export([get_catalog/2, get_catalogs/1]).
@@ -520,17 +520,18 @@ get_product_specs(_Query) ->
 %% 	<a href="http://tools.ietf.org/html/rfc6902">RFC6902</a>.
 patch_offer(OfferId, Etag, RequestBody) ->
 	try
+		OfferId1 = decode_identity(OfferId),
 		Etag1 = case Etag of
 			undefined ->
 				undefined;
 			Etag ->
 				ocs_rest:etag(Etag)
 		end,
-		{Etag1, mochijson:decode(RequestBody)}
+		{OfferId1, Etag1, mochijson:decode(RequestBody)}
 	of
-		{Etag2, {array, _} = Operations} ->
+		{OfferId2, Etag2, {array, _} = Operations} ->
 			F = fun() ->
-					case mnesia:read(offer, OfferId, write) of
+					case mnesia:read(offer, OfferId2, write) of
 						[Offer1] when
 								Offer1#offer.last_modified == Etag2;
 								Etag2 == undefined ->
@@ -566,7 +567,7 @@ patch_offer(OfferId, Etag, RequestBody) ->
 			end,
 			case mnesia:transaction(F) of
 				{atomic, {Offer, Etag3}} ->
-					Location = ?offeringPath ++ OfferId,
+					Location = ?offeringPath ++ OfferId2,
 					Headers = [{content_type, "application/json"},
 							{location, Location}, {etag, ocs_rest:etag(Etag3)}],
 					Body = mochijson:encode(Offer),
@@ -597,6 +598,110 @@ patch_offer(OfferId, Etag, RequestBody) ->
 							detail => "Exception occurred patching Product Offering"},
 					{error, 500, Problem}
 			end
+	catch
+		_:_ ->
+			Problem = #{type => "about:blank",
+					title => "Bad Request",
+					detail => "Exception occurred parsing request"},
+			{error, 400, Problem}
+	end.
+
+-spec merge_patch_offer(OfferId, Etag, RequestBody) -> Result
+	when
+		OfferId :: string(),
+		Etag :: undefined | string(),
+		RequestBody :: string(),
+		Result :: {ok, ResponseHeaders, ResponseBody}
+				| {error, StatusCode}
+				| {error, StatusCode, Problem},
+		ResponseHeaders :: [tuple()],
+		ResponseBody :: iolist(),
+		StatusCode :: 400..599,
+		Problem :: ocs_rest:problem().
+%% @doc Respond to `PATCH /productCatalogManagement/v2/productOffering/{id}'.
+%% 	Update a Product Offering using JSON merge patch method
+%% 	<a href="https://datatracker.ietf.org/doc/html/rfc7386">RFC7386</a>.
+merge_patch_offer(OfferId, Etag, RequestBody) ->
+	try
+		OfferId1 = decode_identity(OfferId),
+		Etag1 = case Etag of
+			undefined ->
+				undefined;
+			Etag ->
+				ocs_rest:etag(Etag)
+		end,
+		{OfferId1, Etag1, mochijson:decode(RequestBody)}
+	of
+		{OfferId2, Etag2, {struct, _} = MergePatch} ->
+			F = fun() ->
+					case mnesia:read(offer, OfferId2, write) of
+						[Offer1] when
+								Offer1#offer.last_modified == Etag2;
+								Etag2 == undefined ->
+							Offer2 = merge_patch(offer(Offer1), MergePatch),
+							case catch offer(Offer2) of
+								#offer{price = Price} = Offer3 ->
+									F1 = fun F1([#price{type = tariff,
+											char_value_use = []} | _]) ->
+												throw(bad_request);
+											F1([_H | T]) ->
+												F1(T);
+											F1([]) ->
+												TS = erlang:system_time(millisecond),
+												N = erlang:unique_integer([positive]),
+												LM = {TS, N},
+												Offer4 = Offer3#offer{last_modified = LM},
+												ok = mnesia:write(Offer4),
+												{Offer2, LM}
+									end,
+									F1(Price);
+								_ ->
+									throw(bad_offer)
+							end;
+						[#offer{}] ->
+							throw(precondition_failed);
+						[] ->
+							throw(not_found)
+					end
+			end,
+			case mnesia:transaction(F) of
+				{atomic, {Offer, Etag3}} ->
+					Location = ?offeringPath ++ OfferId2,
+					Headers = [{content_type, "application/json"},
+							{location, Location}, {etag, ocs_rest:etag(Etag3)}],
+					Body = mochijson:encode(Offer),
+					{ok, Headers, Body};
+				{aborted, {throw, bad_offer}} ->
+					Problem = #{type => "about:blank",
+							title => "Bad Request",
+							detail => "Exception occurred parsing Product Offering"},
+					{error, 400, Problem};
+				{aborted, {throw, bad_request}} ->
+					Problem = #{type => "about:blank",
+							title => "Bad Request",
+							detail => "Product Offering failed validation"},
+					{error, 400, Problem};
+				{aborted, {throw, not_found}} ->
+					Problem = #{type => "about:blank",
+							title => "Not Found",
+							detail => "No such Product Offering found"},
+					{error, 404, Problem};
+				{aborted, {throw, precondition_failed}} ->
+					Problem = #{type => "about:blank",
+							title => "Precondition Failed",
+							detail => "Etag does not match current value"},
+					{error, 412, Problem};
+				{aborted, _Reason} ->
+					Problem = #{type => "about:blank",
+							title => "Internal Server Error",
+							detail => "Exception occurred patching Product Offering"},
+					{error, 500, Problem}
+			end;
+		_ ->
+			Problem = #{type => "about:blank",
+					title => "Bad Request",
+					detail => "Exception occurred parsing request"},
+			{error, 400, Problem}
 	catch
 		_:_ ->
 			Problem = #{type => "about:blank",
@@ -781,6 +886,29 @@ decode_identity(Id) when is_list(Id) ->
 		false ->
 			http_uri:decode(Id)
 	end.
+
+%% @hidden
+merge_patch(Target, {struct, Members}) ->
+	{struct, merge_patch_members(Members, element(2, Target))};
+merge_patch(_Target, Value) ->
+	Value.
+
+%% @hidden
+merge_patch_members([{Key, null} | T], Members) ->
+	merge_patch_members(T, lists:keydelete(Key, 1, Members));
+merge_patch_members([{Key, Value} | T], Members) ->
+	Members1 = case lists:keytake(Key, 1, Members) of
+		{value, {Key, Current}, Rest} when is_tuple(Value), element(1, Value) == struct,
+				is_tuple(Current), element(1, Current) == struct ->
+			[{Key, merge_patch(Current, Value)} | Rest];
+		{value, _, Rest} ->
+			[{Key, Value} | Rest];
+		false ->
+			[{Key, Value} | Members]
+	end,
+	merge_patch_members(T, Members1);
+merge_patch_members([], Members) ->
+	Members.
 
 -spec delete_product(Id) -> Result
 	when
