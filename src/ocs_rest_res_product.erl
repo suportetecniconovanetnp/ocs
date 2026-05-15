@@ -779,7 +779,7 @@ decode_identity(Id) when is_list(Id) ->
 		true ->
 			uri_string:percent_decode(Id);
 		false ->
-			Id
+			http_uri:decode(Id)
 	end.
 
 -spec delete_product(Id) -> Result
