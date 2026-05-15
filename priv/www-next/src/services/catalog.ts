@@ -4,9 +4,26 @@ import type { ProductOffering } from '@/types/tmf';
 const BASE = '/catalogManagement/v2';
 const enc = encodePath;
 
+function offeringIdFromHref(href: string | undefined): string | undefined {
+  if (!href) return undefined;
+  const raw = href.split('/').pop();
+  return raw ? decodeURIComponent(raw) : undefined;
+}
+
+export function normalizeOffering(offering: ProductOffering): ProductOffering {
+  const id = offeringIdFromHref(offering.href) ?? offering.id ?? offering.name;
+  return { ...offering, id };
+}
+
 export const catalogApi = {
-  listOfferings(start = 0, end = 49): Promise<PagedResult<ProductOffering>> {
-    return getList<ProductOffering>(`${BASE}/productOffering`, { headers: rangeHeader(start, end) });
+  async listOfferings(start = 0, end = 49): Promise<PagedResult<ProductOffering>> {
+    const result = await getList<ProductOffering>(`${BASE}/productOffering`, {
+      headers: rangeHeader(start, end),
+    });
+    return {
+      ...result,
+      items: result.items.map(normalizeOffering),
+    };
   },
   /**
    * SigScale OCS does not implement GET /productOffering/{id}. The legacy
@@ -27,7 +44,7 @@ export const catalogApi = {
       const list = await getList<ProductOffering>(`${BASE}/productOffering`, {
         headers: rangeHeader(start, start + PAGE - 1),
       });
-      const found = list.items.find((o) => o.id === id);
+      const found = list.items.map(normalizeOffering).find((o) => o.id === id);
       if (found) return found;
       if (list.items.length < PAGE) break; // exhausted
       start += PAGE;
@@ -35,14 +52,16 @@ export const catalogApi = {
     throw new Error(`Offering "${id}" not found`);
   },
   createOffering(payload: Partial<ProductOffering>): Promise<ProductOffering> {
-    return http.post<ProductOffering>(`${BASE}/productOffering`, payload).then((r) => r.data);
+    return http
+      .post<ProductOffering>(`${BASE}/productOffering`, payload)
+      .then((r) => normalizeOffering(r.data));
   },
   updateOffering(id: string, patch: Partial<ProductOffering>): Promise<ProductOffering> {
     return http
       .patch<ProductOffering>(`${BASE}/productOffering/${enc(id)}`, patch, {
         headers: { 'Content-Type': 'application/merge-patch+json' },
       })
-      .then((r) => r.data);
+      .then((r) => normalizeOffering(r.data));
   },
   deleteOffering(id: string): Promise<void> {
     return http.delete(`${BASE}/productOffering/${enc(id)}`).then(() => undefined);
