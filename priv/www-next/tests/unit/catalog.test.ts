@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { catalogApi, normalizeOffering } from '@/services/catalog';
-import { http } from '@/services/http';
+import { http, OcsApiError } from '@/services/http';
 import type { ProductOffering } from '@/types/tmf';
 
 describe('normalizeOffering', () => {
@@ -41,5 +41,25 @@ describe('catalogApi resource routing', () => {
     expect(del).toHaveBeenCalledWith(
       '/productCatalogManagement/v2/productOffering/NOVATEL TURBO 17GB',
     );
+  });
+
+  it('falls back to syncOffer remove when DELETE returns 404', async () => {
+    vi.spyOn(http, 'delete').mockRejectedValue(new OcsApiError('404 missing', 404));
+    const post = vi.spyOn(http, 'post').mockResolvedValue({} as never);
+
+    await catalogApi.deleteOffering({
+      id: 'NOVATEL TURBO 17GB',
+      name: 'NOVATEL TURBO 17GB',
+      href: '/productCatalogManagement/v2/productOffering/NOVATEL TURBO 17GB',
+    });
+
+    expect(post).toHaveBeenCalledWith('/productCatalogManagement/v2/syncOffer', {
+      eventType: 'ProductOfferingRemoveNotification',
+      event: {
+        id: 'NOVATEL TURBO 17GB',
+        name: 'NOVATEL TURBO 17GB',
+        href: '/productCatalogManagement/v2/productOffering/NOVATEL TURBO 17GB',
+      },
+    });
   });
 });

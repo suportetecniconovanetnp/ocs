@@ -1,4 +1,4 @@
-import { http, getList, rangeHeader, encodePath, type PagedResult } from './http';
+import { OcsApiError, http, getList, rangeHeader, encodePath, type PagedResult } from './http';
 import type { ProductOffering } from '@/types/tmf';
 
 const BASE = '/catalogManagement/v2';
@@ -18,6 +18,26 @@ export function normalizeOffering(offering: ProductOffering): ProductOffering {
 function offeringResourcePath(offering: Pick<ProductOffering, 'id' | 'href'> | string): string {
   if (typeof offering === 'string') return `${BASE}/productOffering/${enc(offering)}`;
   return offering.href ?? `${BASE}/productOffering/${enc(offering.id)}`;
+}
+
+type OfferingRef = Pick<ProductOffering, 'id' | 'href'> & Partial<Pick<ProductOffering, 'name'>>;
+
+function offeringDeleteName(offering: OfferingRef | string): string | undefined {
+  if (typeof offering === 'string') return offering;
+  return offering.name ?? offering.id;
+}
+
+async function deleteOfferingViaSyncEvent(offering: OfferingRef | string): Promise<void> {
+  const name = offeringDeleteName(offering);
+  if (!name) throw new Error('Offering name is required for syncOffer delete fallback');
+  await http.post('/productCatalogManagement/v2/syncOffer', {
+    eventType: 'ProductOfferingRemoveNotification',
+    event: {
+      id: name,
+      name,
+      ...(typeof offering === 'string' ? {} : offering.href ? { href: offering.href } : {}),
+    },
+  });
 }
 
 export const catalogApi = {
@@ -71,7 +91,18 @@ export const catalogApi = {
       })
       .then((r) => normalizeOffering(r.data));
   },
-  deleteOffering(offering: Pick<ProductOffering, 'id' | 'href'> | string): Promise<void> {
-    return http.delete(offeringResourcePath(offering)).then(() => undefined);
+  async deleteOffering(offering: OfferingRef | string): Promise<void> {
+    try {
+      await http.delete(offeringResourcePath(offering));
+    } catch (error) {
+      // Some deployed OCS nodes do not percent-decode DELETE path segments,
+      // so names with spaces return 404 even though the offering exists.
+      // Fall back to the syncOffer remove event, which deletes by payload.
+      if (error instanceof OcsApiError && error.status === 404) {
+        await deleteOfferingViaSyncEvent(offering);
+        return;
+      }
+      throw error;
+    }
   },
 };
