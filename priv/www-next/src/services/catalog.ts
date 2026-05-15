@@ -27,15 +27,25 @@ function offeringDeleteName(offering: OfferingRef | string): string | undefined 
   return offering.name ?? offering.id;
 }
 
+function syncEventId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 async function deleteOfferingViaSyncEvent(offering: OfferingRef | string): Promise<void> {
   const name = offeringDeleteName(offering);
   if (!name) throw new Error('Offering name is required for syncOffer delete fallback');
+  const href =
+    typeof offering === 'string'
+      ? `/productCatalogManagement/v2/productOffering/${enc(name)}`
+      : offering.href ?? `/productCatalogManagement/v2/productOffering/${enc(name)}`;
   await http.post('/productCatalogManagement/v2/syncOffer', {
+    eventId: syncEventId(),
+    eventTime: new Date().toISOString(),
     eventType: 'ProductOfferingRemoveNotification',
     event: {
       id: name,
       name,
-      ...(typeof offering === 'string' ? {} : offering.href ? { href: offering.href } : {}),
+      href,
     },
   });
 }

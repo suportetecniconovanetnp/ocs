@@ -53,13 +53,18 @@ describe('catalogApi resource routing', () => {
       href: '/productCatalogManagement/v2/productOffering/NOVATEL TURBO 17GB',
     });
 
-    expect(post).toHaveBeenCalledWith('/productCatalogManagement/v2/syncOffer', {
-      eventType: 'ProductOfferingRemoveNotification',
-      event: {
-        id: 'NOVATEL TURBO 17GB',
-        name: 'NOVATEL TURBO 17GB',
-        href: '/productCatalogManagement/v2/productOffering/NOVATEL TURBO 17GB',
-      },
-    });
+    expect(post).toHaveBeenCalledWith(
+      '/productCatalogManagement/v2/syncOffer',
+      expect.objectContaining({
+        eventId: expect.any(String),
+        eventTime: expect.any(String),
+        eventType: 'ProductOfferingRemoveNotification',
+        event: {
+          id: 'NOVATEL TURBO 17GB',
+          name: 'NOVATEL TURBO 17GB',
+          href: '/productCatalogManagement/v2/productOffering/NOVATEL TURBO 17GB',
+        },
+      }),
+    );
   });
 });

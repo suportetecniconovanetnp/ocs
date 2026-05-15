@@ -1,7 +1,6 @@
 import { defineConfig, loadEnv, type PluginOption } from 'vite';
 import vue from '@vitejs/plugin-vue';
 import vuetify from 'vite-plugin-vuetify';
-import { VitePWA } from 'vite-plugin-pwa';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { fileURLToPath, URL } from 'node:url';
 
@@ -39,28 +38,6 @@ export default defineConfig(({ mode }) => {
       vue(),
       vuetify({ autoImport: true }),
       dynamicOcsProxy(apiTarget),
-      VitePWA({
-        registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'images/**/*'],
-        manifest: {
-          name: 'Online Charging System',
-          short_name: 'ocs',
-          description: 'Online Charging System (OCS)',
-          theme_color: '#f57f17',
-          background_color: '#ffffff',
-          display: 'standalone',
-          start_url: '/',
-          icons: [
-            { src: 'images/manifest/sigscale-icon-16x16.png', sizes: '16x16', type: 'image/png' },
-            { src: 'images/manifest/sigscale-icon-32x32.png', sizes: '32x32', type: 'image/png' },
-            { src: 'images/manifest/sigscale-icon-64x64.png', sizes: '64x64', type: 'image/png' },
-            { src: 'images/manifest/sigscale-logo-232x132.png', sizes: '232x132', type: 'image/png' },
-          ],
-        },
-        workbox: {
-          navigateFallbackDenylist: [/^\/__ocs\//, /^\/api\//],
-        },
-      }),
     ],
     resolve: {
       alias: {
