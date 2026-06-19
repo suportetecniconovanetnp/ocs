@@ -44,16 +44,28 @@ export interface PagedResult<T> {
 }
 
 const RANGE_RE = /items\s+(\d+)-(\d+)\/(\d+|\*)/i;
+const UNSATISFIABLE_RANGE_RE = /items\s+\*\/(\d+|\*)/i;
 
 function parseContentRange(header: string | undefined): PagedResult<unknown>['contentRange'] {
   if (!header) return undefined;
   const match = RANGE_RE.exec(header);
-  if (!match) return undefined;
-  const [, start, end, total] = match;
+  if (match) {
+    const [, start, end, total] = match;
+    return {
+      start: Number(start),
+      end: Number(end),
+      total: total === '*' ? undefined : Number(total),
+    };
+  }
+
+  const unsatisfiable = UNSATISFIABLE_RANGE_RE.exec(header);
+  if (!unsatisfiable) return undefined;
+  const [, total] = unsatisfiable;
+  const parsedTotal = total === '*' ? undefined : Number(total);
   return {
-    start: Number(start),
-    end: Number(end),
-    total: total === '*' ? undefined : Number(total),
+    start: 0,
+    end: 0,
+    total: parsedTotal,
   };
 }
 
@@ -171,10 +183,11 @@ export async function getList<T>(url: string, config?: AxiosRequestConfig): Prom
     validateStatus: (status) => (status >= 200 && status < 300) || status === 416,
   });
   if (response.status === 416) {
+    const contentRange = parseContentRange(response.headers['content-range'] as string | undefined);
     return {
       items: [],
-      total: 0,
-      contentRange: parseContentRange(response.headers['content-range'] as string | undefined),
+      total: contentRange?.total ?? 0,
+      contentRange,
     };
   }
   return {
