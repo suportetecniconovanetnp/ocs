@@ -46,7 +46,7 @@ export interface PagedResult<T> {
 const RANGE_RE = /items\s+(\d+)-(\d+)\/(\d+|\*)/i;
 const UNSATISFIABLE_RANGE_RE = /items\s+\*\/(\d+|\*)/i;
 
-function parseContentRange(header: string | undefined): PagedResult<unknown>['contentRange'] {
+export function parseContentRange(header: string | undefined): PagedResult<unknown>['contentRange'] {
   if (!header) return undefined;
   const match = RANGE_RE.exec(header);
   if (match) {

@@ -1,4 +1,11 @@
-import { http, getList, rangeHeader, encodePath, type PagedResult } from './http';
+import {
+  http,
+  getList,
+  rangeHeader,
+  encodePath,
+  parseContentRange,
+  type PagedResult,
+} from './http';
 import type { Service } from '@/types/tmf';
 
 const BASE = '/serviceInventoryManagement/v2';
@@ -15,9 +22,22 @@ export const subscribersApi = {
     const items: Service[] = [];
     let start = 0;
     let total: number | undefined;
+    let etag: string | undefined;
 
     while (true) {
-      const page = await subscribersApi.list(start, start + LIST_PAGE_SIZE - 1);
+      const response = await http.get<Service[]>(`${BASE}/service`, {
+        headers: {
+          ...rangeHeader(start, start + LIST_PAGE_SIZE - 1),
+          ...(etag && start > 0 ? { 'If-Range': etag } : {}),
+        },
+        validateStatus: (status) => (status >= 200 && status < 300) || status === 416,
+      });
+      const page: PagedResult<Service> = {
+        items: response.status === 416 ? [] : response.data,
+        total: undefined,
+        contentRange: parseContentRange(response.headers['content-range'] as string | undefined),
+      };
+      etag = (response.headers['etag'] as string | undefined) ?? etag;
       items.push(...page.items);
       total = page.contentRange?.total ?? page.total ?? total;
 
