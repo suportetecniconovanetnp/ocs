@@ -1,3 +1,44 @@
+June 3, 2026
+------------
+	- Charge mobile forwarded call to forwarding subscriber
+	- Fix reaping all reservations when no consumed units in final request
+
+May 28 2026
+------------
+	- PWA dashboard includes Nrf Rating statistics 
+	- Health API includes Nrf Rating statistics
+
+May 27 2026
+------------
+	- Shortcut command for Nrf statistics
+	- Nrf service statistics counters
+	- Correct ServiceRating in Nrf response
+	- Correct user location info codec in nrf handler
+
+May 23, 2026
+------------
+	- Handle missing ServiceRating in Nrf release
+
+May 22, 2026
+------------
+	- Fix CDR log rotation schedule calculationn
+
+May 20, 2026
+------------
+	- Nrf CODEC improvements 
+	- Shortcut command fix for diameter statistics
+	- Shortcut command fix for auth log query
+
+May 07, 2026
+------------
+	- Fix column filtering in grid views of PWA
+
+May 04, 2026
+------------
+	- VCS-Information (CAMEL) in CDR
+	- Handle Requested-Party-Address in CDR
+	- AAA SWx interface resiliency improvements
+
 April 29, 2026
 --------------
 	- No zero unit size rated records

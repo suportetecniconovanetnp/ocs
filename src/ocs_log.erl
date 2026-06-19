@@ -5453,13 +5453,27 @@ chf_vcs5(nrf = Protocol, ReqType,
 chf_vcs5(diameter = Protocol, ReqType,
 		#'3gpp_ro_CCR'{'Service-Information' = [ServiceInfo]} = Req,
 		Res, CFR) ->
-	CFR1 = case diameter_ims_charging_info(ServiceInfo) of
+	CFR1 = case diameter_pdu_session_charging_info(ServiceInfo) of
 		undefined ->
 			CFR;
-		ImsInfo ->
-			CFR#{iMSChargingInformation => ImsInfo}
+		PduInfo ->
+			CFR#{pDUSessionChargingInformation => PduInfo}
 	end,
-	chf_vcs6(Protocol, ReqType, Req, Res, CFR1);
+	CFR2 = case diameter_ims_charging_info(ServiceInfo) of
+		undefined ->
+			CFR1;
+		ImsInfo ->
+			CFR1#{iMSChargingInformation => ImsInfo}
+	end,
+	CFR3 = case diameter_vcs_charging_info(ServiceInfo) of
+		undefined ->
+			CFR2;
+		VcsInfo ->
+			ImsInfo1 = maps:get(iMSChargingInformation, CFR2, #{}),
+			ImsInfo2 = maps:merge(ImsInfo1, VcsInfo),
+			CFR1#{iMSChargingInformation => ImsInfo2}
+	end,
+	chf_vcs6(Protocol, ReqType, Req, Res, CFR2);
 chf_vcs5(Protocol, ReqType, Req, Res, CFR) ->
 	chf_vcs6(Protocol, ReqType, Req, Res, CFR).
 %% @hidden
@@ -5876,7 +5890,7 @@ nrf_cgi1(CGI, Acc) ->
 	nrf_cgi2(CGI, Acc).
 %% @hidden
 nrf_cgi2(#{"utraCellId" := CID} = CGI, Acc) ->
-	Acc1 = Acc#{utraCellId => CID},
+	Acc1 = Acc#{cellId => CID},
 	nrf_cgi3(CGI, Acc1);
 nrf_cgi2(CGI, Acc) ->
 	nrf_cgi3(CGI, Acc).
@@ -6416,89 +6430,90 @@ diameter_pdu_session_charging_info9(_PSI, Acc) ->
 %% @hidden
 % CGI (3GPP TS 29.274 8.21.1)
 diameter_user_location_info(<<0, MCCMNC:3/binary, LAC:16, CI:16>>) ->
-	CGI = #{plmnId => tbcd(MCCMNC),
+	CGI = #{plmnId => plmn_id(MCCMNC),
 			lac => list_to_binary(io_lib:fwrite("~4.16.0b", [LAC])),
-			utraCellId => list_to_binary(io_lib:fwrite("~4.16.0b", [CI]))},
+			cellId => list_to_binary(io_lib:fwrite("~4.16.0b", [CI]))},
 	#{utraLocation => #{cgi => CGI}};
 % SAI (3GPP TS 29.274 8.21.2)
 diameter_user_location_info(<<1, MCCMNC:3/binary, LAC:16, SAC:16>>) ->
-	SAI = #{plmnId => tbcd(MCCMNC),
+	SAI = #{plmnId => plmn_id(MCCMNC),
 			lac => list_to_binary(io_lib:fwrite("~4.16.0b", [LAC])),
 			sac => list_to_binary(io_lib:fwrite("~4.16.0b", [SAC]))},
 	#{utraLocation => #{sai => SAI}};
 % RAI (3GPP TS 29.274 8.21.3)
 diameter_user_location_info(<<2, MCCMNC:3/binary, LAC:16, RAC:16>>) ->
-	RAI = #{plmnId => tbcd(MCCMNC),
+	RAI = #{plmnId => plmn_id(MCCMNC),
 			lac => list_to_binary(io_lib:fwrite("~4.16.0b", [LAC])),
 			rac => list_to_binary(io_lib:fwrite("~4.16.0b", [RAC]))},
 	#{utraLocation => #{rai => RAI}};
 % TAI (3GPP TS 29.274 8.21.4)
 diameter_user_location_info(<<128, MCCMNC:3/binary, TAC:16>>) ->
-	TAI = #{plmnId => tbcd(MCCMNC),
+	TAI = #{plmnId => plmn_id(MCCMNC),
 			tac => list_to_binary(io_lib:fwrite("~4.16.0b", [TAC]))},
 	#{eutraLocation => #{tai => TAI}};
 % ECGI (3GPP TS 29.274 8.21.5)
 diameter_user_location_info(<<129, MCCMNC:3/binary, _:4, ECI:28>>) ->
-	ECGI = #{plmnId => tbcd(MCCMNC),
+	ECGI = #{plmnId => plmn_id(MCCMNC),
 			eutraCellId => list_to_binary(io_lib:fwrite("~7.16.0b", [ECI]))},
 	#{eutraLocation => #{ecgi => ECGI}};
 % TAI and ECGI
 diameter_user_location_info(<<130, MCCMNC1:3/binary, TAC:16, MCCMNC2:3/binary,
 		_:4, ECI:28>>) ->
-	TAI = #{plmnId => tbcd(MCCMNC1),
+	TAI = #{plmnId => plmn_id(MCCMNC1),
 			tac => list_to_binary(io_lib:fwrite("~4.16.0b", [TAC]))},
-	ECGI = #{plmnId => tbcd(MCCMNC2),
+	ECGI = #{plmnId => plmn_id(MCCMNC2),
 			eutraCellId => list_to_binary(io_lib:fwrite("~7.16.0b", [ECI]))},
 	#{eutraLocation => #{tai => TAI, ecgi => ECGI}};
 % Macro eNodeB ID (3GPP TS 29.274 8.21.7)
 diameter_user_location_info(<<131, MCCMNC:3/binary, _:4, ENBID:20>>) ->
-	ECGI = #{plmnId => tbcd(MCCMNC),
+	ECGI = #{plmnId => plmn_id(MCCMNC),
 			globalENbId => list_to_binary(io_lib:fwrite("~5.16.0b", [ENBID]))},
 	#{eutraLocation => #{ecgi => ECGI}};
 % TAI and eNodeB ID
 diameter_user_location_info(<<132, MCCMNC1:3/binary, TAC:16, MCCMNC2:3/binary,
 		_:4, ENBID:20>>) ->
-	TAI = #{plmnId => tbcd(MCCMNC1),
+	TAI = #{plmnId => plmn_id(MCCMNC1),
 			tac => list_to_binary(io_lib:fwrite("~4.16.0b", [TAC]))},
-	ECGI = #{plmnId => tbcd(MCCMNC2),
+	ECGI = #{plmnId => plmn_id(MCCMNC2),
 			globalENbId => list_to_binary(io_lib:fwrite("~5.16.0b", [ENBID]))},
 	#{eutraLocation => #{tai => TAI, ecgi => ECGI}};
 % Extended long macro eNodeB ID (3GPP TS 29.274 8.21.8)
 diameter_user_location_info(<<133, MCCMNC:3/binary, 0:1, _:2, ENBID:21>>) ->
-	ECGI = #{plmnId => tbcd(MCCMNC),
+	ECGI = #{plmnId => plmn_id(MCCMNC),
 			globalENbId => list_to_binary(io_lib:fwrite("~6.16.0b", [ENBID]))},
 	#{eutraLocation => #{ecgi => ECGI}};
 % Extended short macro eNodeB ID (3GPP TS 29.274 8.21.8)
 diameter_user_location_info(<<133, MCCMNC:3/binary, 1:1, _:5, ENBID:18>>) ->
-	ECGI = #{plmnId => tbcd(MCCMNC),
+	ECGI = #{plmnId => plmn_id(MCCMNC),
 			globalENbId => list_to_binary(io_lib:fwrite("~5.16.0b", [ENBID]))},
 	#{eutraLocation => #{ecgi => ECGI}};
 % TAI and extended long macro eNodeB ID
 diameter_user_location_info(<<134, MCCMNC1:3/binary, TAC:16, MCCMNC2:3/binary,
 		0:1, _:2, ENBID:21>>) ->
-	TAI = #{plmnId => tbcd(MCCMNC1),
+	TAI = #{plmnId => plmn_id(MCCMNC1),
 			tac => list_to_binary(io_lib:fwrite("~4.16.0b", [TAC]))},
-	ECGI = #{plmnId => tbcd(MCCMNC2),
+	ECGI = #{plmnId => plmn_id(MCCMNC2),
 			globalENbId => list_to_binary(io_lib:fwrite("~6.16.0b", [ENBID]))},
 	#{eutraLocation => #{tai => TAI, ecgi => ECGI}};
 % TAI and extended short macro eNodeB ID
 diameter_user_location_info(<<134, MCCMNC1:3/binary, TAC:16, MCCMNC2:3/binary,
 		1:1, _:5, ENBID:18>>) ->
-	TAI = #{plmnId => tbcd(MCCMNC1),
+	TAI = #{plmnId => plmn_id(MCCMNC1),
 			tac => list_to_binary(io_lib:fwrite("~4.16.0b", [TAC]))},
-	ECGI = #{plmnId => tbcd(MCCMNC2),
+	ECGI = #{plmnId => plmn_id(MCCMNC2),
 			globalENbId => list_to_binary(io_lib:fwrite("~5.16.0b", [ENBID]))},
 	#{eutraLocation => #{tai => TAI, ecgi => ECGI}}.
 
 %% @hidden
-tbcd(<<MCC2:4, MCC1:4, 15:4, MCC3:4, MNC2:4, MNC1:4>>) ->
+plmn_id(<<MCC2:4, MCC1:4, 15:4, MCC3:4, MNC2:4, MNC1:4>>) ->
 	MCC = tbcd(<<MCC2:4, MCC1:4, 15:4, MCC3:4>>, []),
 	MNC = tbcd(<<MNC2:4, MNC1:4>>, []),
 	list_to_binary([MCC, MNC]);
-tbcd(<<MCC2:4, MCC1:4, MNC3:4, MCC3:4, MNC2:4, MNC1:4>>) ->
+plmn_id(<<MCC2:4, MCC1:4, MNC3:4, MCC3:4, MNC2:4, MNC1:4>>) ->
 	MCC = tbcd(<<MCC2:4, MCC1:4, 15:4, MCC3:4>>, []),
 	MNC = tbcd(<<MNC2:4, MNC1:4, 15:4, MNC3:4>>, []),
 	list_to_binary([MCC, MNC]).
+
 %% @hidden
 tbcd(<<15:4, A:4>>, Acc) ->
 	lists:reverse([A + 48 | Acc]);
@@ -6516,51 +6531,62 @@ diameter_ims_charging_info(_) ->
 	undefined.
 %% @hidden
 diameter_ims_charging_info1(#'3gpp_ro_IMS-Information'{
-		'Calling-Party-Address' = CP} = SI, Acc) ->
-	CallingPartyAddresses = diameter_involved_party(CP),
-	Acc1 = Acc#{callingPartyAddresses => CallingPartyAddresses},
+		'Node-Functionality' = ?'3GPP_RO_NODE-FUNCTIONALITY_AS'} = SI, Acc) ->
+	Acc1 = Acc#{iMSNodeFunctionality => aS},
 	diameter_ims_charging_info2(SI, Acc1);
 diameter_ims_charging_info1(SI, Acc) ->
 	diameter_ims_charging_info2(SI, Acc).
 %% @hidden
 diameter_ims_charging_info2(#'3gpp_ro_IMS-Information'{
-		'Called-Party-Address' = CP} = SI, Acc) ->
-	[CalledPartyAddress] = diameter_involved_party(CP),
-	Acc1 = Acc#{calledPartyAddress => CalledPartyAddress},
+		'Role-Of-Node' = [?'3GPP_RO_ROLE-OF-NODE_ORIGINATING_ROLE']} = SI, Acc) ->
+	Acc1 = Acc#{roleOfNode => originating},
+	diameter_ims_charging_info3(SI, Acc1);
+diameter_ims_charging_info2(#'3gpp_ro_IMS-Information'{
+		'Role-Of-Node' = [?'3GPP_RO_ROLE-OF-NODE_TERMINATING_ROLE']} = SI, Acc) ->
+	Acc1 = Acc#{roleOfNode => terminating},
+	diameter_ims_charging_info3(SI, Acc1);
+diameter_ims_charging_info2(#'3gpp_ro_IMS-Information'{
+		'Role-Of-Node' = [?'3GPP_RO_ROLE-OF-NODE_FORWARDING_ROLE']} = SI, Acc) ->
+	Acc1 = Acc#{roleOfNode => forwarding},
 	diameter_ims_charging_info3(SI, Acc1);
 diameter_ims_charging_info2(SI, Acc) ->
 	diameter_ims_charging_info3(SI, Acc).
 %% @hidden
 diameter_ims_charging_info3(#'3gpp_ro_IMS-Information'{
-		'Node-Functionality' = ?'3GPP_RO_NODE-FUNCTIONALITY_AS'} = SI, Acc) ->
-	Acc1 = Acc#{iMSNodeFunctionality => aS},
+		'Calling-Party-Address' = CP} = SI, Acc)
+		when length(CP) > 0 ->
+	CallingPartyAddresses = diameter_involved_party(CP),
+	Acc1 = Acc#{callingPartyAddresses => CallingPartyAddresses},
 	diameter_ims_charging_info4(SI, Acc1);
 diameter_ims_charging_info3(SI, Acc) ->
 	diameter_ims_charging_info4(SI, Acc).
 %% @hidden
 diameter_ims_charging_info4(#'3gpp_ro_IMS-Information'{
-		'Role-Of-Node' = [?'3GPP_RO_ROLE-OF-NODE_ORIGINATING_ROLE']} = SI, Acc) ->
-	Acc1 = Acc#{roleOfNode => originating},
-	diameter_ims_charging_info5(SI, Acc1);
-diameter_ims_charging_info4(#'3gpp_ro_IMS-Information'{
-		'Role-Of-Node' = [?'3GPP_RO_ROLE-OF-NODE_TERMINATING_ROLE']} = SI, Acc) ->
-	Acc1 = Acc#{roleOfNode => terminating},
-	diameter_ims_charging_info5(SI, Acc1);
-diameter_ims_charging_info4(#'3gpp_ro_IMS-Information'{
-		'Role-Of-Node' = [?'3GPP_RO_ROLE-OF-NODE_FORWARDING_ROLE']} = SI, Acc) ->
-	Acc1 = Acc#{roleOfNode => forwarding},
+		'Called-Party-Address' = CP} = SI, Acc)
+		when length(CP) == 1 ->
+	[CalledPartyAddress] = diameter_involved_party(CP),
+	Acc1 = Acc#{calledPartyAddress => CalledPartyAddress},
 	diameter_ims_charging_info5(SI, Acc1);
 diameter_ims_charging_info4(SI, Acc) ->
 	diameter_ims_charging_info5(SI, Acc).
 %% @hidden
 diameter_ims_charging_info5(#'3gpp_ro_IMS-Information'{
-		'IMS-Visited-Network-Identifier' = [VNI]} = SI, Acc) ->
-	Acc1 = Acc#{imsVisitedNetworkIdentifier => VNI},
+		'Requested-Party-Address' = RP} = SI, Acc)
+		when length(RP) > 0 ->
+	RequestedPartyAddresses = diameter_involved_party(RP),
+	Acc1 = Acc#{requestedPartyAddresses => RequestedPartyAddresses},
 	diameter_ims_charging_info6(SI, Acc1);
 diameter_ims_charging_info5(SI, Acc) ->
 	diameter_ims_charging_info6(SI, Acc).
 %% @hidden
-diameter_ims_charging_info6(_SI, Acc) ->
+diameter_ims_charging_info6(#'3gpp_ro_IMS-Information'{
+		'IMS-Visited-Network-Identifier' = [VNI]} = SI, Acc) ->
+	Acc1 = Acc#{imsVisitedNetworkIdentifier => VNI},
+	diameter_ims_charging_info7(SI, Acc1);
+diameter_ims_charging_info6(SI, Acc) ->
+	diameter_ims_charging_info7(SI, Acc).
+%% @hidden
+diameter_ims_charging_info7(_SI, Acc) ->
 	Acc.
 
 %% @hidden
@@ -6693,6 +6719,66 @@ diameter_sm_service_type(?'3GPP_RO_SM-SERVICE-TYPE_VAS4SMSPERSONALSIGNATURE') ->
 	9;
 diameter_sm_service_type(?'3GPP_RO_SM-SERVICE-TYPE_VAS4SMSDEFERREDDELIVERY') ->
 	10.
+
+%% @hidden
+diameter_vcs_charging_info(#'3gpp_ro_Service-Information'{
+		'VCS-Information' = [SI]}) ->
+	diameter_vcs_charging_info1(SI, #{});
+diameter_vcs_charging_info(_) ->
+	undefined.
+%% @hidden
+%diameter_vcs_charging_info1(#'3gpp_ro_VCS-Information'{
+%		'Bearer-Capability' = [BC]} = SI, Acc) ->
+%	Acc1 = Acc#{ => BC},
+%	diameter_vcs_charging_info2(SI, Acc1);
+diameter_vcs_charging_info1(SI, Acc) ->
+	diameter_vcs_charging_info2(SI, Acc).
+%% @hidden
+%diameter_vcs_charging_info2(#'3gpp_ro_VCS-Information'{
+%		'Network-Call-Reference-Number' = [NCRN]} = SI, Acc) ->
+%	Acc1 = Acc#{ => },
+%	diameter_vcs_charging_info3(SI, Acc1);
+diameter_vcs_charging_info2(SI, Acc) ->
+	diameter_vcs_charging_info3(SI, Acc).
+%% @hidden
+diameter_vcs_charging_info3(#'3gpp_ro_VCS-Information'{
+		'MSC-Address' = [MSC]} = SI, Acc) ->
+	Acc1 = Acc#{mscAddress => <<1:1, 1:3, 1:4, MSC/binary>>},
+	diameter_vcs_charging_info4(SI, Acc1);
+diameter_vcs_charging_info3(SI, Acc) ->
+	diameter_vcs_charging_info4(SI, Acc).
+%% @hidden
+%diameter_vcs_charging_info4(#'3gpp_ro_VCS-Information'{
+%		'Basic-Service-Code' = [BSC]} = SI, Acc) ->
+%	Acc1 = Acc#{bearerService => },
+%	diameter_vcs_charging_info5(SI, Acc1);
+diameter_vcs_charging_info4(SI, Acc) ->
+	diameter_vcs_charging_info5(SI, Acc).
+%% @hidden
+%diameter_vcs_charging_info5(#'3gpp_ro_VCS-Information'{
+%		'ISUP-Location-Number' = [LRN]} = SI, Acc) ->
+%	Acc1 = Acc#{? => },
+%	diameter_vcs_charging_info6(SI, Acc1);
+diameter_vcs_charging_info5(SI, Acc) ->
+	diameter_vcs_charging_info6(SI, Acc).
+%% @hidden
+diameter_vcs_charging_info6(#'3gpp_ro_VCS-Information'{
+		'VLR-Number' = [VLR]} = SI, Acc) ->
+	Acc1 = Acc#{vlrNumber => <<1:1, 1:3, 1:4, VLR/binary>>},
+	diameter_vcs_charging_info7(SI, Acc1);
+diameter_vcs_charging_info6(SI, Acc) ->
+	diameter_vcs_charging_info7(SI, Acc).
+%% @hidden
+diameter_vcs_charging_info7(#'3gpp_ro_VCS-Information'{
+		'ISUP-Cause' = [#'3gpp_ro_ISUP-Cause'{
+				'ISUP-Cause-Value' = [Cause]}]} = SI, Acc) ->
+	Acc1 = Acc#{causeCode => Cause},
+	diameter_vcs_charging_info8(SI, Acc1);
+diameter_vcs_charging_info7(SI, Acc) ->
+	diameter_vcs_charging_info8(SI, Acc).
+%% @hidden
+diameter_vcs_charging_info8(_SI, Acc) ->
+	Acc.
 
 %% @hidden
 radius_pdu_session_charging_info(Attr) ->
@@ -6869,6 +6955,10 @@ chf_cfr_csv8(#{sMSChargingInformation
 chf_cfr_csv8(#{iMSChargingInformation
 		:= #{calledPartyAddress := CalledParty}} = CFR, Acc) ->
 	Destination = csv_involved_party(CalledParty),
+	chf_cfr_csv9(CFR, [Destination | Acc]);
+chf_cfr_csv8(#{iMSChargingInformation
+		:= #{requestedPartyAddresses := [H | _]}} = CFR, Acc) ->
+	Destination = csv_involved_party(H),
 	chf_cfr_csv9(CFR, [Destination | Acc]);
 chf_cfr_csv8(CFR, Acc) ->
 	chf_cfr_csv9(CFR, [<<>> | Acc]).
@@ -7053,6 +7143,9 @@ csv_ncgi(#{plmnId := PLMN, nrCellId := Cell}) ->
 
 %% @hidden
 csv_cgi(#{plmnId := PLMN, cellId := Cell}) ->
+	{PLMN, Cell};
+% to be removed; handle old nrf_cgi2/2 and diameter_user_location_info/1
+csv_cgi(#{plmnId := PLMN, utraCellId := Cell}) ->
 	{PLMN, Cell}.
 
 -dialyzer({nowarn_function, [location_info/1]}).

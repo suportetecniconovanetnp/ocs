@@ -130,6 +130,12 @@ initial_nrf1(ModData,
 				LogRequest = RatingDataRequest#{"ratingSessionId" => RatingDataRef},
 				Problem = rest_error_response(Reason, InvalidParams),
 				{error, 404, LogEventType, LogRequest, Problem};
+			{error, service_rejected = Reason} ->
+				LogRequest = RatingDataRequest#{"ratingSessionId" => RatingDataRef},
+				InvalidParams = [#{param => "/subscriptionId",
+						reason => "Service rejected for subscriber"}],
+				Problem = rest_error_response(Reason, InvalidParams),
+				{error, 403, LogEventType, LogRequest, Problem};
 			{error, invalid_service_type = Reason} ->
 				LogRequest = RatingDataRequest#{"ratingSessionId" => RatingDataRef},
 				InvalidParams = [#{param => "/serviceContextId",
@@ -148,10 +154,13 @@ initial_nrf1(ModData,
 			ResponseBody = mochijson:encode(RatingDataResponse1),
 			ok = ocs_log:acct_log(nrf, server(ModData), LogEventType1,
 					LogRequest1, LogResponse, Rated1),
+			ets:update_counter(counters, {nrf, "SUCCESS"}, 1, {{nrf, "SUCCESS"}, 0}),
 			{ok, Headers, ResponseBody};
 		{error, StatusCode, LogEventType1, LogRequest1, Problem1} ->
 			ok = ocs_log:acct_log(nrf, server(ModData), LogEventType1,
 					LogRequest1, Problem1, undefined),
+			Cause = maps:get(cause, Problem1, "SYSTEM_FAILURE"),
+			ets:update_counter(counters, {nrf, Cause}, 1, {{nrf, Cause}, 0}),
 			{error, StatusCode, Problem1}
 	catch
 		?CATCH_STACK ->
@@ -159,6 +168,8 @@ initial_nrf1(ModData,
 			error_logger:warning_report(["Unable to process Nrf request",
 					{ratingDataRef, RatingDataRef}, {request, RatingDataRequest},
 					{operation, start}, {error, Reason1}, {stack, StackTrace}]),
+			ets:update_counter(counters,
+					{nrf, "SYSTEM_FAILURE"}, 1, {{nrf, "SYSTEM_FAILURE"}, 0}),
 			{error, 500}
 	end;
 initial_nrf1(_ModData, RatingDataRequest) ->
@@ -243,6 +254,12 @@ update_nrf2(ModData, RatingDataRef,
 						reason => "Unknown subscriber identifier"}],
 				Problem = rest_error_response(Reason, InvalidParams),
 				{error, 404, LogRequest, Problem};
+			{error, service_rejected = Reason} ->
+				LogRequest = RatingDataRequest#{"ratingSessionId" => RatingDataRef},
+				InvalidParams = [#{param => "/subscriptionId",
+						reason => "Service rejected for subscriber"}],
+				Problem = rest_error_response(Reason, InvalidParams),
+				{error, 403, LogRequest, Problem};
 			{error, invalid_service_type = Reason} ->
 				LogRequest = RatingDataRequest#{"ratingSessionId" => RatingDataRef},
 				InvalidParams = [#{param => "/serviceContextId",
@@ -260,10 +277,13 @@ update_nrf2(ModData, RatingDataRef,
 			ResponseBody = mochijson:encode(RatingDataResponse1),
 			ok = ocs_log:acct_log(nrf, server(ModData), update,
 					LogRequest1, LogResponse, undefined),
+			ets:update_counter(counters, {nrf, "SUCCESS"}, 1, {{nrf, "SUCCESS"}, 0}),
 			{200, Headers, ResponseBody};
 		{error, StatusCode, LogRequest1, Problem1} ->
 			ok = ocs_log:acct_log(nrf, server(ModData), update,
 					LogRequest1, Problem1, undefined),
+			Cause = maps:get(cause, Problem1, "SYSTEM_FAILURE"),
+			ets:update_counter(counters, {nrf, Cause}, 1, {{nrf, Cause}, 0}),
 			{error, StatusCode, Problem1}
 	catch
 		?CATCH_STACK ->
@@ -271,6 +291,8 @@ update_nrf2(ModData, RatingDataRef,
 			error_logger:warning_report(["Unable to process Nrf request",
 					{ratingDataRef, RatingDataRef}, {request, RatingDataRequest},
 					{operation, update}, {error, Reason1}, {stack, StackTrace}]),
+			ets:update_counter(counters,
+					{nrf, "SYSTEM_FAILURE"}, 1, {{nrf, "SYSTEM_FAILURE"}, 0}),
 			{error, 500}
 	end;
 update_nrf2(_ModData, _RatingDataRef, RatingDataRequest) ->
@@ -342,11 +364,15 @@ release_nrf2(ModData, RatingDataRef,
 		when is_list(NF), is_list(TS), is_integer(SN), is_list(Context) ->
 	try
 		case rate(RatingDataRef, RatingDataRequest, final) of
-			{ok, ServiceRating, Rated} ->
+			{ok, ServiceRating, Rated} when length(ServiceRating) > 0 ->
 				UpdatedMap = maps:update("serviceRating", ServiceRating, RatingDataRequest),
 				RatingDataResponse = rating_data(UpdatedMap),
 				LogRequest = RatingDataRequest#{"ratingSessionId" => RatingDataRef},
 				{RatingDataResponse, LogRequest, UpdatedMap, Rated};
+			{ok, _ServiceRating, Rated} ->
+				RatingDataResponse = rating_data(RatingDataRequest),
+				LogRequest = RatingDataRequest#{"ratingSessionId" => RatingDataRef},
+				{RatingDataResponse, LogRequest, RatingDataRequest, Rated};
 			{out_of_credit, _ServiceRating, Rated} ->
 				LogRequest = RatingDataRequest#{"ratingSessionId" => RatingDataRef},
 				Problem = rest_error_response(out_of_credit, undefined),
@@ -357,6 +383,12 @@ release_nrf2(ModData, RatingDataRef,
 						reason => "Unknown subscriber identifier"}],
 				Problem = rest_error_response(Reason, InvalidParams),
 				{error, 404, LogRequest, Problem, []};
+			{error, service_rejected = Reason} ->
+				LogRequest = RatingDataRequest#{"ratingSessionId" => RatingDataRef},
+				InvalidParams = [#{param => "/subscriptionId",
+						reason => "Service rejected for subscriber"}],
+				Problem = rest_error_response(Reason, InvalidParams),
+				{error, 403, LogRequest, Problem};
 			{error, invalid_service_type = Reason} ->
 				LogRequest = RatingDataRequest#{"ratingSessionId" => RatingDataRef},
 				InvalidParams = [#{param => "/serviceContextId",
@@ -375,11 +407,14 @@ release_nrf2(ModData, RatingDataRef,
 			ResponseBody = mochijson:encode(RatingDataResponse1),
 			ok = ocs_log:acct_log(nrf, server(ModData), stop,
 					LogRequest1, LogResponse, Rated1),
+			ets:update_counter(counters, {nrf, "SUCCESS"}, 1, {{nrf, "SUCCESS"}, 0}),
 			{200, Headers, ResponseBody};
 		{error, StatusCode, LogRequest1, Problem1, Rated1} ->
 			ok = remove_ref(RatingDataRef),
 			ok = ocs_log:acct_log(nrf, server(ModData), stop,
 					LogRequest1, Problem1, Rated1),
+			Cause = maps:get(cause, Problem1, "SYSTEM_FAILURE"),
+			ets:update_counter(counters, {nrf, Cause}, 1, {{nrf, Cause}, 0}),
 			{error, StatusCode, Problem1}
 	catch
 		?CATCH_STACK ->
@@ -388,6 +423,8 @@ release_nrf2(ModData, RatingDataRef,
 			error_logger:warning_report(["Unable to process Nrf request",
 					{ratingDataRef, RatingDataRef}, {request, RatingDataRequest},
 					{operation, release}, {error, Reason1}, {stack, StackTrace}]),
+			ets:update_counter(counters,
+					{nrf, "SYSTEM_FAILURE"}, 1, {{nrf, "SYSTEM_FAILURE"}, 0}),
 			{error, 500}
 	end;
 release_nrf2(_ModData, _RatingDataRef, RatingDataRequest) ->
@@ -485,6 +522,12 @@ rest_error_response(service_not_found, InvalidParams) ->
 			type => "https://app.swaggerhub.com/apis-docs/SigScale/nrf-rating/1.2.1#/",
 			title => "Request denied because the subscriber identity is unrecognized",
 			invalidParams => InvalidParams};
+rest_error_response(service_rejected, InvalidParams) ->
+	#{cause => "END_USER REQUEST_DENIED",
+			status => 403,
+			type => "https://app.swaggerhub.com/apis-docs/SigScale/nrf-rating/1.2.1#/",
+			title => "Request denied due to restrictions or limitations related to the subscriber",
+			invalidParams => InvalidParams};
 rest_error_response(rating_failed, undefined) ->
 	#{cause => "RATING_FAILED",
 			status => 400,
@@ -551,18 +594,24 @@ rest_error_response(httpd_directory_undefined, undefined) ->
 		ServiceRating :: [map()],
 		Rated :: ocs_log:acct_rated(),
 		Reason :: offer_not_found | product_not_found | service_not_found
-				| invalid_service_type | invalid_bundle_product | term().
+				| invalid_service_type | invalid_bundle_product
+				| no_subscription_id | term().
 %% @doc Rate Nrf `ServiceRatingRequest's.
 %% @hidden
 rate(RatingDataRef, #{"subscriptionId" := SubscriptionIds,
 		"serviceRating" := ServiceRating} = RatingDataRequest,
 		Flag) when length(SubscriptionIds) > 0 ->
 	rate(list_to_binary(RatingDataRef), RatingDataRequest, Flag,
-			ServiceRating, []).
+			ServiceRating, []);
+rate(RatingDataRef, #{"subscriptionId" := SubscriptionIds} = RatingDataRequest,
+		Flag) when length(SubscriptionIds) > 0 ->
+	rate(list_to_binary(RatingDataRef), RatingDataRequest, Flag, [], []);
+rate(_RatingDataRef, _RatingDataRequest, _Flag) ->
+	{error, no_subscription_id}.
 %% @hidden
 rate(RatingDataRef,
 		#{"serviceContextId" := ServiceContextId} = RatingDataRequest,
-		Flag, [H | T], Acc) ->
+		Flag, [H | T] = _ServiceRating, Acc) ->
 	ChargingKey = case maps:find("ratingGroup", H) of
 		{ok, RG} ->
 			RG;
@@ -639,6 +688,14 @@ rate(RatingDataRef,
 	Args = {ServiceType, ChargingKey, ServiceId, ServiceNetwork,
 			Address, Direction, SessionAttributes, Debit, Reserve},
 	rate(RatingDataRef, RatingDataRequest, Flag, T, [Args | Acc]);
+rate(RatingDataRef,
+		#{"serviceContextId" := ServiceContextId} = RatingDataRequest,
+		final = Flag, [] = _ServiceRating, [] = Acc) ->
+	ServiceType = service_type(ServiceContextId),
+	SessionAttributes = session_id(RatingDataRef, undefined, undefined),
+	Args = {ServiceType, undefined, undefined, undefined,
+			undefined, undefined, SessionAttributes, [], undefined},
+	rate(RatingDataRef, RatingDataRequest, Flag, [], [Args | Acc]);
 rate(RatingDataRef,
 		#{"subscriptionId" := SubscriptionIds} = _RatingDataRequest,
 		Flag, [], Acc) ->
@@ -808,7 +865,11 @@ rating_data(#{"invocationTimeStamp" := TS,
 	{struct, [{"invocationTimeStamp", TS},
 			{"invocationSequenceNumber", SeqNum},
 			{"serviceRating",
-					{array, service_rating(ServiceRating)}}]}.
+					{array, service_rating(ServiceRating)}}]};
+rating_data(#{"invocationTimeStamp" := TS,
+		"invocationSequenceNumber" := SeqNum}) ->
+	{struct, [{"invocationTimeStamp", TS},
+			{"invocationSequenceNumber", SeqNum}]}.
 %% @hidden
 rating_data1([{"invocationTimeStamp", TS} | T], Acc)
 		when is_list(TS) ->
@@ -837,7 +898,8 @@ rating_data1([{"nfConsumerIdentification",
 			Acc
 	end,
 	rating_data1(T, Acc1);
-rating_data1([{"serviceRating", {array, ServiceRating}} | T], Acc) ->
+rating_data1([{"serviceRating", {array, ServiceRating}} | T], Acc)
+		when length(ServiceRating) > 0 ->
 	rating_data1(T, Acc#{"serviceRating" => service_rating(ServiceRating)});
 rating_data1([_H | T], Acc) ->
 	rating_data1(T, Acc);
@@ -973,42 +1035,37 @@ sr_out(#{"resultCode" := RC} = M, Acc) ->
 sr_out(M, Acc) ->
 	sr_out1(M, Acc).
 %% @hidden
-sr_out1(#{"serviceInformation" := SI} = M, Acc) ->
-	sr_out2(M, [{"serviceInformation", service_information(SI)} | Acc]);
+sr_out1(#{"uPFID" := UPFID} = M, Acc) ->
+	sr_out2(M, [{"uPFID", UPFID} | Acc]);
 sr_out1(M, Acc) ->
 	sr_out2(M, Acc).
 %% @hidden
-sr_out2(#{"uPFID" := UPFID} = M, Acc) ->
-	sr_out3(M, [{"uPFID", UPFID} | Acc]);
+sr_out2(#{"validUnits" := VU} = M, Acc) ->
+	sr_out3(M, [{"validUnits", VU} | Acc]);
 sr_out2(M, Acc) ->
 	sr_out3(M, Acc).
 %% @hidden
-sr_out3(#{"validUnits" := VU} = M, Acc) ->
-	sr_out4(M, [{"validUnits", VU} | Acc]);
+sr_out3(#{"grantedUnit" := Units} = M, Acc) ->
+	sr_out4(M, [{"grantedUnit", {struct, maps:to_list(Units)}} | Acc]);
 sr_out3(M, Acc) ->
 	sr_out4(M, Acc).
 %% @hidden
-sr_out4(#{"grantedUnit" := Units} = M, Acc) ->
-	sr_out5(M, [{"grantedUnit", {struct, maps:to_list(Units)}} | Acc]);
+sr_out4(#{"consumedUnit" := Units} = M, Acc) ->
+	sr_out5(M, [{"consumedUnit", {struct, maps:to_list(Units)}} | Acc]);
 sr_out4(M, Acc) ->
 	sr_out5(M, Acc).
 %% @hidden
-sr_out5(#{"consumedUnit" := Units} = M, Acc) ->
-	sr_out6(M, [{"consumedUnit", {struct, maps:to_list(Units)}} | Acc]);
+sr_out5(#{"ratingGroup" := RG} = M, Acc) ->
+	sr_out6(M, [{"ratingGroup", RG} | Acc]);
 sr_out5(M, Acc) ->
 	sr_out6(M, Acc).
 %% @hidden
-sr_out6(#{"ratingGroup" := RG} = M, Acc) ->
-	sr_out7(M, [{"ratingGroup", RG} | Acc]);
+sr_out6(#{"serviceId" := SI} = M, Acc) ->
+	sr_out7(M, [{"serviceId", SI} | Acc]);
 sr_out6(M, Acc) ->
 	sr_out7(M, Acc).
 %% @hidden
-sr_out7(#{"serviceId" := SI} = M, Acc) ->
-	sr_out8(M, [{"serviceId", SI} | Acc]);
-sr_out7(M, Acc) ->
-	sr_out8(M, Acc).
-%% @hidden
-sr_out8(_M, Acc) ->
+sr_out7(_M, Acc) ->
 	{struct, Acc}.
 
 %% @hidden
@@ -1035,8 +1092,14 @@ sr_in([{"requestedUnit", {struct, Units}} | T], Acc) ->
 	sr_in(T, Acc#{"requestedUnit" => maps:from_list(Units)});
 sr_in([{"consumedUnit", {struct, Units}} | T], Acc) ->
 	sr_in(T, Acc#{"consumedUnit" => maps:from_list(Units)});
-sr_in([{"serviceInformation", {struct, SI}} | T], Acc) ->
-	sr_in(T, Acc#{"serviceInformation" => service_information(SI)});
+sr_in([{"serviceInformation", {struct, SI}} | T], Acc)
+		when length(SI) > 0 ->
+	case service_information(SI) of
+		SImap when map_size(SImap) > 0 ->
+			sr_in(T, Acc#{"serviceInformation" => SImap});
+		_SImap ->
+			sr_in(T, Acc)
+	end;
 sr_in([_Other | T], Acc) ->
 	sr_in(T, Acc);
 sr_in([], Acc) ->
@@ -1098,8 +1161,13 @@ si_in([{"sgsnMccMnc", {struct, MccMnc}} | T], Acc)
 		when is_list(MccMnc) ->
 	si_in(T, Acc#{"sgsnMccMnc" => maps:from_list(MccMnc)});
 si_in([{"userLocationinfo", {struct, ULI}} | T], Acc)
-		when is_list(ULI) ->
-	si_in(T, Acc#{"userLocationinfo" => user_location_info(ULI)});
+		when length(ULI) > 0 ->
+	case user_location_info(ULI) of
+		ULImap when map_size(ULImap) > 0 ->
+			si_in(T, Acc#{"userLocationinfo" => ULImap});
+		_ULImap ->
+			si_in(T, Acc)
+	end;
 si_in([{"visitedNetworkIdentifier", VNI} | T], Acc)
 		when is_list(VNI) ->
 	si_in(T, Acc#{"visitedNetworkIdentifier" => VNI});
@@ -1122,7 +1190,7 @@ user_location_info(ULI) ->
 	user_location_info(ULI, #{}).
 %% @hidden
 user_location_info([{"utraLocation", {struct, Location}} | T], Acc)
-		when is_list(Location) ->
+		when length(Location) > 0 ->
 	case user_location_info1(Location, #{}) of
 		ULI when map_size(ULI) > 0 ->
 			Acc#{"utraLocation" => ULI};
@@ -1130,7 +1198,7 @@ user_location_info([{"utraLocation", {struct, Location}} | T], Acc)
 			user_location_info(T, Acc)
 	end;
 user_location_info([{"eutraLocation", {struct, Location}} | T], Acc)
-		when is_list(Location) ->
+		when length(Location) > 0 ->
 	case user_location_info1(Location, #{}) of
 		ULI when map_size(ULI) > 0 ->
 			Acc#{"eutraLocation" => ULI};
@@ -1138,7 +1206,7 @@ user_location_info([{"eutraLocation", {struct, Location}} | T], Acc)
 			user_location_info(T, Acc)
 	end;
 user_location_info([{"nrLocation", {struct, Location}} | T], Acc)
-		when is_list(Location) ->
+		when length(Location) > 0 ->
 	case user_location_info1(Location, #{}) of
 		ULI when map_size(ULI) > 0 ->
 			Acc#{"nrLocation" => ULI};
@@ -1146,7 +1214,7 @@ user_location_info([{"nrLocation", {struct, Location}} | T], Acc)
 			user_location_info(T, Acc)
 	end;
 user_location_info([{"n3gaLocation", {struct, Location}} | T], Acc)
-		when is_list(Location) ->
+		when length(Location) > 0 ->
 	case user_location_info1(Location, #{}) of
 		ULI when map_size(ULI) > 0 ->
 			Acc#{"nrLocation" => ULI};
@@ -1160,7 +1228,7 @@ user_location_info([], Acc) ->
 
 %% @hidden
 user_location_info1([{"cgi", {struct, CGI}} | T], Acc)
-		when is_list(CGI) ->
+		when length(CGI) > 0 ->
 	case user_location_info2(CGI, #{}) of
 		PLMN when map_size(PLMN) > 0 ->
 			Acc#{"cgi" => PLMN};
@@ -1168,7 +1236,7 @@ user_location_info1([{"cgi", {struct, CGI}} | T], Acc)
 			user_location_info1(T, Acc)
 	end;
 user_location_info1([{"ecgi", {struct, ECGI}} | T], Acc)
-		when is_list(ECGI) ->
+		when length(ECGI) > 0 ->
 	case user_location_info2(ECGI, #{}) of
 		PLMN when map_size(PLMN) > 0 ->
 			Acc#{"ecgi" => PLMN};
@@ -1176,7 +1244,7 @@ user_location_info1([{"ecgi", {struct, ECGI}} | T], Acc)
 			user_location_info1(T, Acc)
 	end;
 user_location_info1([{"ncgi", {struct, NCGI}} | T], Acc)
-		when is_list(NCGI) ->
+		when length(NCGI) > 0 ->
 	case user_location_info2(NCGI, #{}) of
 		PLMN when map_size(PLMN) > 0 ->
 			Acc#{"ncgi" => PLMN};
@@ -1184,7 +1252,7 @@ user_location_info1([{"ncgi", {struct, NCGI}} | T], Acc)
 			user_location_info1(T, Acc)
 	end;
 user_location_info1([{"tai", {struct, TAI}} | T], Acc)
-		when is_list(TAI) ->
+		when length(TAI) > 0 ->
 	case user_location_info2(TAI, #{}) of
 		PLMN when map_size(PLMN) > 0 ->
 			Acc#{"tai" => PLMN};
@@ -1192,7 +1260,7 @@ user_location_info1([{"tai", {struct, TAI}} | T], Acc)
 			user_location_info1(T, Acc)
 	end;
 user_location_info1([{"sai", {struct, SAI}} | T], Acc)
-		when is_list(SAI) ->
+		when length(SAI) > 0 ->
 	case user_location_info2(SAI, #{}) of
 		PLMN when map_size(PLMN) > 0 ->
 			Acc#{"sai" => PLMN};
@@ -1200,7 +1268,7 @@ user_location_info1([{"sai", {struct, SAI}} | T], Acc)
 			user_location_info1(T, Acc)
 	end;
 user_location_info1([{"rai", {struct, RAI}} | T], Acc)
-		when is_list(RAI) ->
+		when length(RAI) > 0 ->
 	case user_location_info2(RAI, #{}) of
 		PLMN when map_size(PLMN) > 0 ->
 			Acc#{"rai" => PLMN};
@@ -1208,7 +1276,7 @@ user_location_info1([{"rai", {struct, RAI}} | T], Acc)
 			user_location_info1(T, Acc)
 	end;
 user_location_info1([{"n3gppTai", {struct, TAI}} | T], Acc)
-		when is_list(TAI) ->
+		when length(TAI) > 0 ->
 	case user_location_info2(TAI, #{}) of
 		PLMN when map_size(PLMN) > 0 ->
 			Acc#{"n3gppTai" => PLMN};
@@ -1221,9 +1289,9 @@ user_location_info1([], Acc) ->
 	Acc.
 
 %% @hidden
-user_location_info2([{"plmnid", {struct, PLMN}} | _T], Acc)
-		when is_list(PLMN) ->
-	Acc#{"plmnid" => maps:from_list(PLMN)};
+user_location_info2([{"plmnId", {struct, PLMN}} | _T], Acc)
+		when length(PLMN) > 0 ->
+	Acc#{"plmnId" => maps:from_list(PLMN)};
 user_location_info2([_ | T], Acc) ->
 	user_location_info2(T, Acc);
 user_location_info2([], Acc) ->
@@ -1346,28 +1414,28 @@ authorize_rating4(Username, Address, Port, Directory) ->
 service_network(#{"sgsnMccMnc" := #{"mcc" := MCC, "mnc" := MNC}}) ->
 	MCC ++ MNC;
 service_network(#{"userLocationinfo" := #{"utraLocation"
-		:= #{"cgi" := #{"plmnid" := #{"mcc" := MCC, "mnc" := MNC}}}}}) ->
+		:= #{"cgi" := #{"plmnId" := #{"mcc" := MCC, "mnc" := MNC}}}}}) ->
 	MCC ++ MNC;
 service_network(#{"userLocationinfo" := #{"utraLocation"
-		:= #{"sai" := #{"plmnid" := #{"mcc" := MCC, "mnc" := MNC}}}}}) ->
+		:= #{"sai" := #{"plmnId" := #{"mcc" := MCC, "mnc" := MNC}}}}}) ->
 	MCC ++ MNC;
 service_network(#{"userLocationinfo" := #{"utraLocation"
-		:= #{"rai" := #{"plmnid" := #{"mcc" := MCC, "mnc" := MNC}}}}}) ->
+		:= #{"rai" := #{"plmnId" := #{"mcc" := MCC, "mnc" := MNC}}}}}) ->
 	MCC ++ MNC;
 service_network(#{"userLocationinfo" := #{"eutraLocation"
-		:= #{"ecgi" := #{"plmnid" := #{"mcc" := MCC, "mnc" := MNC}}}}}) ->
+		:= #{"ecgi" := #{"plmnId" := #{"mcc" := MCC, "mnc" := MNC}}}}}) ->
 	MCC ++ MNC;
 service_network(#{"userLocationinfo" := #{"eutraLocation"
-		:= #{"tai" := #{"plmnid" := #{"mcc" := MCC, "mnc" := MNC}}}}}) ->
+		:= #{"tai" := #{"plmnId" := #{"mcc" := MCC, "mnc" := MNC}}}}}) ->
 	MCC ++ MNC;
 service_network(#{"userLocationinfo" := #{"nrLocation"
-		:= #{"ncgi" := #{"plmnid" := #{"mcc" := MCC, "mnc" := MNC}}}}}) ->
+		:= #{"ncgi" := #{"plmnId" := #{"mcc" := MCC, "mnc" := MNC}}}}}) ->
 	MCC ++ MNC;
 service_network(#{"userLocationinfo" := #{"nrLocation"
-		:= #{"tai" := #{"plmnid" := #{"mcc" := MCC, "mnc" := MNC}}}}}) ->
+		:= #{"tai" := #{"plmnId" := #{"mcc" := MCC, "mnc" := MNC}}}}}) ->
 	MCC ++ MNC;
 service_network(#{"userLocationinfo" := #{"n3gaLocation"
-		:= #{"n3gppTai" := #{"plmnid" := #{"mcc" := MCC, "mnc" := MNC}}}}}) ->
+		:= #{"n3gppTai" := #{"plmnId" := #{"mcc" := MCC, "mnc" := MNC}}}}}) ->
 	MCC ++ MNC;
 service_network(_) ->
 	undefined.

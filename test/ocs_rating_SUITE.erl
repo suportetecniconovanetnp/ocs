@@ -117,6 +117,7 @@ all() ->
 	roaming_table_data, roaming_table_voice,
 	roaming_table_sms_ecur, roaming_table_sms_iec, roaming_table_sms_iec_rsu,
 	final_empty_mscc, final_empty_mscc_multiple_services,
+	final_empty_service_rating,
 	initial_invalid_service_type, refund_unused_reservation,
 	refund_partially_used_reservation, tariff_prices,
 	allowance_bucket, tariff_bucket_voice,
@@ -230,18 +231,15 @@ initial_add_session(_Config) ->
 	Timestamp = calendar:local_time(),
 	Protocol = protocol(),
 	ServiceType = service_type(Protocol, data),
-	AcctSessionId = {?AcctSessionId, list_to_binary(ocs:generate_password())},
-	NasIp = {?NasIpAddress, "192.168.7.17"},
-	NasId = {?NasIdentifier, ocs:generate_password()},
-	SessionAttr = [NasId, NasIp, AcctSessionId, {?ServiceType, ServiceType}],
-	{ok, #service{session_attributes = [{_, SessionId}]},
+	SessionAttr = session_id(Protocol),
+	{ok, #service{session_attributes = [{_, SessionAttr}]},
 			{PackageUnits, PackageSize}} = ocs_rating:rate(Protocol,
 			ServiceType, undefined, undefined, undefined, [ServiceId],
 			Timestamp, undefined, undefined,
 			initial, [], [{PackageUnits, PackageSize}], SessionAttr),
 	ok = mnesia:sync_log(),
 	{ok, #bucket{attributes = Attr}} = ocs:find_bucket(BId),
-	#{reservations := #{SessionId := #{debit := PackagePrice,
+	#{reservations := #{SessionAttr := #{debit := PackagePrice,
 			reserve := 0}}} = Attr.
 
 initial_overhead() ->
@@ -2609,18 +2607,18 @@ final_empty_mscc_multiple_services(_Config) ->
 	ServiceType = 32251,
 	Timestamp1 = calendar:local_time(),
 	TS1 = calendar:datetime_to_gregorian_seconds(Timestamp1),
-	{ok, _, _} = ocs_rating:rate(diameter, ServiceType, undefined,
-			undefined, undefined, [ServiceId1], Timestamp1, undefined, undefined,
-			initial, [], [], SessionId),
-	{ok, _, _} = ocs_rating:rate(diameter, ServiceType,
-			32, undefined, undefined, [ServiceId1], calendar:gregorian_seconds_to_datetime(TS1 + 60), undefined,
-			undefined, interim, [{octets, 300000000}], [], SessionId),
-	{ok, _, _} = ocs_rating:rate(diameter, ServiceType,
-			65, undefined, undefined, [ServiceId1], calendar:gregorian_seconds_to_datetime(TS1 + 120), undefined,
-			undefined, interim, [{octets, 15000000}], [], SessionId),
-	{ok, _, _} = ocs_rating:rate(diameter, ServiceType,
-			undefined, undefined, undefined, [ServiceId1], Timestamp1, undefined,
-			undefined, final, [], undefined, SessionId),
+	{ok, _, _} = ocs_rating:rate(diameter, ServiceType, undefined, undefined,
+			undefined, [ServiceId1], Timestamp1,
+			undefined, undefined, initial, [], [], SessionId),
+	{ok, _, _} = ocs_rating:rate(diameter, ServiceType, undefined, 32,
+			undefined, [ServiceId1], calendar:gregorian_seconds_to_datetime(TS1 + 60),
+			undefined, undefined, interim, [{octets, 300000000}], [], SessionId),
+	{ok, _, _} = ocs_rating:rate(diameter, ServiceType, undefined, 65,
+			undefined, [ServiceId1], calendar:gregorian_seconds_to_datetime(TS1 + 120),
+			undefined, undefined, interim, [{octets, 15000000}], [], SessionId),
+	{ok, _, _} = ocs_rating:rate(diameter, ServiceType, undefined, undefined,
+			undefined, [ServiceId1], Timestamp1,
+			undefined, undefined, final, [], undefined, SessionId),
 	ok = mnesia:sync_log(),
 	BucketList = ocs:get_buckets(ProdRef),
 	F1 = fun(#bucket{attributes = #{reservations := Reservation}})
@@ -2634,6 +2632,58 @@ final_empty_mscc_multiple_services(_Config) ->
 							true
 				end,
 				F2(maps:next(I1));
+			(#bucket{}) ->
+				true
+	end,
+	true = lists:all(F1, BucketList).
+
+final_empty_service_rating() ->
+	[{userdata, [{doc, "Rate final reaps all reservations"}]}].
+
+final_empty_service_rating(_Config) ->
+	UnitSize = 1000000 + rand:uniform(10000),
+	Amount = rand:uniform(100000000),
+	P1 = price(usage, octets, UnitSize, Amount),
+	OfferId = add_offer([P1], 8),
+	ProdRef = add_product(OfferId),
+	ServiceId = add_service(ProdRef),
+	RemAmount = ocs_rest:millionths_in(20000),
+	B1 = #bucket{units = cents, remain_amount = RemAmount,
+			start_date = erlang:system_time(millisecond),
+			attributes = #{bucket_type => normal}},
+	_BId = add_bucket(ProdRef, B1),
+	ServiceType = 32255,
+	RG1 = 32,
+	RG2 = 72,
+	RatingDataRef = integer_to_list(erlang:system_time(millisecond))
+			++ integer_to_list(erlang:unique_integer([positive])),
+	SessionId = [{nrf_ref, RatingDataRef}],
+	SessionId1 = SessionId ++ [{upfid, "deadbeefcafe"}, {rg, RG1}],
+	SessionId2 = SessionId ++ [{upfid, "deadbeefcafe"}, {rg, RG2}],
+	Timestamp1 = calendar:local_time(),
+	TS1 = calendar:datetime_to_gregorian_seconds(Timestamp1),
+	{ok, _, _} = ocs_rating:rate(nrf, ServiceType, undefined, RG1,
+			undefined, [ServiceId], Timestamp1,
+			undefined, undefined, initial, [], [], SessionId1),
+	{ok, _, _} = ocs_rating:rate(nrf, ServiceType, undefined, RG2,
+			undefined, [ServiceId], Timestamp1,
+			undefined, undefined, initial, [], [], SessionId2),
+	{ok, _, _} = ocs_rating:rate(diameter, ServiceType, undefined, RG1,
+			undefined, [ServiceId], calendar:gregorian_seconds_to_datetime(TS1 + 60),
+			undefined, undefined, interim, [{octets, rand:uniform(UnitSize)}],
+			[], SessionId1),
+	{ok, _, _} = ocs_rating:rate(diameter, ServiceType, undefined, 65,
+			undefined, [ServiceId], calendar:gregorian_seconds_to_datetime(TS1 + 120),
+			undefined, undefined, interim, [{octets, rand:uniform(UnitSize)}],
+			[], SessionId2),
+	{ok, _, _} = ocs_rating:rate(diameter, ServiceType, undefined, undefined,
+			undefined, [ServiceId], Timestamp1, undefined, undefined,
+			final, [], undefined, SessionId),
+	ok = mnesia:sync_log(),
+	BucketList = ocs:get_buckets(ProdRef),
+	F1 = fun(#bucket{attributes = Attributes})
+					when is_map_key(reservations, Attributes) ->
+				false;
 			(#bucket{}) ->
 				true
 	end,
@@ -3897,16 +3947,16 @@ session_id(radius) ->
 	AcctSessionId = {?AcctSessionId, SessionId},
 	Address = inet:ntoa({192, 168, rand:uniform(256) - 1, rand:uniform(254)}),
 	NasIp = {?NasIpAddress, Address},
-	NasId = {?NasIdentifier, ocs:generate_password()},
+	NasId = {?NasIdentifier, list_to_binary(ocs:generate_password())},
 	[NasIp, NasId, AcctSessionId];
 session_id(diameter) ->
 	SessionId = diameter:session_id(ocs:generate_password()),
-	[{'Session-Id', SessionId}];
+	[{'Session-Id', list_to_binary(SessionId)}];
 session_id(nrf) ->
 	TS = erlang:system_time(millisecond),
 	N = erlang:unique_integer([positive]),
 	RatingDataRef = integer_to_list(TS) ++ integer_to_list(N),
-	[{nrf_ref, RatingDataRef}].
+	[{nrf_ref, list_to_binary(RatingDataRef)}].
 
 validate_balance(Amount, Buckets) ->
 	F = fun(#bucket{attributes = #{bucket_type := normal}}) ->
