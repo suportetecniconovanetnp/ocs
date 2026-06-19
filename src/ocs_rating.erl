@@ -3496,7 +3496,7 @@ session_state(#bucket{units = Units, remain_amount = Remain,
 			+ erlang:max(Remain, 0)},
 	case maps:get(reservations, Attributes, undefined) of
 		Reservations when is_map(Reservations) ->
-			{Debited, Reserved, _} = get_debits(ServiceId,
+			{Debited, Reserved, _} = get_final_debits(ServiceId,
 					ChargingKey, SessionId, Reservations),
 			Acc#{Units => State1#{debited => maps:get(debited, State1) + Debited,
 					reserved => maps:get(reserved, State1) + Reserved}};
@@ -3547,7 +3547,7 @@ session_debits_fold(#bucket{units = Units,
 		attributes = #{reservations := Reservations}},
 		ServiceId, ChargingKey, SessionId, Acc)
 		when is_map(Reservations) ->
-	{Debited, _Refund, _Reservations} = get_debits(ServiceId,
+	{Debited, _Refund, _Reservations} = get_final_debits(ServiceId,
 			ChargingKey, SessionId, Reservations),
 	case Debited of
 		0 ->
