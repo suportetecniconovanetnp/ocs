@@ -18,14 +18,9 @@ const confirmDialog = ref<InstanceType<typeof ConfirmDialog> | null>(null);
 const notifications = useNotificationsStore();
 const { date, bytes, duration, number, money } = useFormatters();
 
-// Fetch a large page from the server (SigScale's Vaadin filter for
-// product.id crashes with hyphenated IDs) and filter client-side. 500 is
-// generous — typical deployments rarely have more live buckets than that.
-const FETCH_SIZE = ref(500);
-
-const buckets = useAsyncResource(() =>
-  balanceApi.listBuckets(undefined, 0, FETCH_SIZE.value - 1),
-);
+// Fetch the full collection in paged batches, then filter locally. The
+// backend expects If-Range continuation headers after the first page.
+const buckets = useAsyncResource(() => balanceApi.listAllBuckets());
 
 // Reset page to 1 whenever the filter changes, debounced.
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -46,6 +41,7 @@ const filtered = computed<Bucket[]>(() => {
 const total = computed(() => filtered.value.length);
 
 const paginated = computed(() => {
+  if (itemsPerPage.value === -1) return filtered.value;
   const start = (page.value - 1) * itemsPerPage.value;
   return filtered.value.slice(start, start + itemsPerPage.value);
 });
@@ -137,7 +133,7 @@ async function remove(bucket: Bucket) {
           prepend-inner-icon="mdi-magnify"
           placeholder="Filter by product ID (client-side substring match)"
           clearable
-          :hint="`Showing ${total} of ${buckets.data.value?.items.length ?? 0} fetched (cap ${FETCH_SIZE}).`"
+          :hint="`Showing ${total} of ${buckets.data.value?.items.length ?? 0} fetched (client-side filter).`"
           persistent-hint
           class="mb-3"
         />

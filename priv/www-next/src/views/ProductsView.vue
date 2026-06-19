@@ -19,10 +19,9 @@ const filterText = ref('');
 const topupDialog = ref<InstanceType<typeof TopupDialog> | null>(null);
 const confirmDialog = ref<InstanceType<typeof ConfirmDialog> | null>(null);
 
-// Pull a wide page client-side; filtering goes through `filterText`. Same
-// rationale as BucketsView — the SigScale Vaadin filter crashes on hyphens.
-const FETCH_SIZE = 500;
-const products = useAsyncResource(() => productsApi.list(0, FETCH_SIZE - 1));
+// Fetch the full collection in paged batches, then filter locally. The
+// backend expects If-Range continuation headers after the first page.
+const products = useAsyncResource(() => productsApi.listAll());
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 watch(filterText, () => {
@@ -50,6 +49,7 @@ const filtered = computed<Product[]>(() => {
 const total = computed(() => filtered.value.length);
 
 const paginated = computed(() => {
+  if (itemsPerPage.value === -1) return filtered.value;
   const start = (page.value - 1) * itemsPerPage.value;
   return filtered.value.slice(start, start + itemsPerPage.value);
 });
@@ -189,7 +189,7 @@ async function remove(product: Product) {
           prepend-inner-icon="mdi-magnify"
           placeholder="Filter by product ID, offering or service identity"
           clearable
-          :hint="`Showing ${total} of ${products.data.value?.items.length ?? 0} fetched (cap ${FETCH_SIZE}).`"
+          :hint="`Showing ${total} of ${products.data.value?.items.length ?? 0} fetched (client-side filter).`"
           persistent-hint
           class="mb-3"
         />
