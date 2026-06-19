@@ -19,7 +19,6 @@ const page = ref(1);
 const itemsPerPage = ref(25);
 const search = ref('');
 const expanded = ref<string[]>([]);
-const lastKnownTotal = ref<number | null>(null);
 const editing = ref<Service | null>(null);
 const formDialog = ref<InstanceType<typeof SubscriberFormDialog> | null>(null);
 const trafficDialog = ref<InstanceType<typeof SubscriberTrafficDialog> | null>(null);
@@ -36,55 +35,19 @@ const deleteMessage = computed(() => {
   return `This will permanently remove subscriber "${p.serviceId}" AND its associated product "${p.productId}" (including all buckets bound to that product). Continue?`;
 });
 
-const range = computed(() => {
-  const showAll = itemsPerPage.value === -1;
-  const effectivePageSize = showAll ? Math.max(lastKnownTotal.value ?? 0, 1_000) : itemsPerPage.value;
-  const start = showAll ? 0 : (page.value - 1) * effectivePageSize;
-  return { start, end: start + effectivePageSize - 1 };
-});
-
-const subscribers = useAsyncResource(() =>
-  subscribersApi.list(range.value.start, range.value.end, search.value || undefined),
-);
-
-watch([page, itemsPerPage], ([, nextItemsPerPage]) => {
-  if (nextItemsPerPage === -1 && page.value !== 1) {
-    page.value = 1;
-    return;
-  }
-  void subscribers.reload();
-});
-
-watch(
-  () => subscribers.data.value,
-  (result) => {
-    const nextTotal = result?.contentRange?.total ?? result?.total;
-    if (typeof nextTotal === 'number') lastKnownTotal.value = nextTotal;
-  },
-);
+const subscribers = useAsyncResource(() => subscribersApi.listAll());
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 watch(search, () => {
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
     page.value = 1;
-    void subscribers.reload();
   }, 300);
 });
 
-const total = computed(
-  () => {
-    const result = subscribers.data.value;
-    const exact = result?.contentRange?.total ?? result?.total;
-    if (typeof exact === 'number') return exact;
-
-    const count = result?.items.length ?? 0;
-    if (itemsPerPage.value === -1) return count;
-
-    const start = (page.value - 1) * itemsPerPage.value;
-    return count === itemsPerPage.value ? start + count + 1 : start + count;
-  },
-);
+watch(itemsPerPage, () => {
+  page.value = 1;
+});
 
 const headers = [
   { title: 'ID', key: 'id', sortable: false },
@@ -111,6 +74,37 @@ function extras(svc: Service): { name: string; value: string }[] {
     .filter((c) => !KNOWN_CHARS.has(c.name))
     .map((c) => ({ name: c.name, value: String(c.value) }));
 }
+
+function matches(svc: Service, rawNeedle: string): boolean {
+  const needle = rawNeedle.trim().toLowerCase();
+  if (!needle) return true;
+
+  if (svc.id.toLowerCase().includes(needle)) return true;
+
+  const productId = productIdFromService(svc);
+  if (productId?.toLowerCase().includes(needle)) return true;
+
+  return Boolean(
+    svc.serviceCharacteristic?.some((c) => {
+      const name = c.name.toLowerCase();
+      const value = String(c.value).toLowerCase();
+      return name.includes(needle) || value.includes(needle);
+    }),
+  );
+}
+
+const filtered = computed<Service[]>(() => {
+  const all = subscribers.data.value?.items ?? [];
+  return all.filter((svc) => matches(svc, search.value));
+});
+
+const total = computed(() => filtered.value.length);
+
+const paginated = computed<Service[]>(() => {
+  if (itemsPerPage.value === -1) return filtered.value;
+  const start = (page.value - 1) * itemsPerPage.value;
+  return filtered.value.slice(start, start + itemsPerPage.value);
+});
 
 function productIdFromService(svc: Service): string | undefined {
   // SigScale exposes the product link as a flat string on the Service
@@ -209,15 +203,17 @@ async function remove(svc: Service) {
         <v-text-field
           v-model="search"
           prepend-inner-icon="mdi-magnify"
-          :placeholder="safeT('search', 'Search by identity')"
+          :placeholder="safeT('search', 'Search by ID, product or characteristics')"
           clearable
+          :hint="`Showing ${total} of ${subscribers.data.value?.items.length ?? 0} fetched (client-side filter).`"
+          persistent-hint
           class="mb-3"
         />
         <v-data-table-server
           v-model:items-per-page="itemsPerPage"
           v-model:page="page"
           v-model:expanded="expanded"
-          :items="subscribers.data.value?.items ?? []"
+          :items="paginated"
           :items-length="total"
           :headers="headers"
           :loading="subscribers.loading.value"

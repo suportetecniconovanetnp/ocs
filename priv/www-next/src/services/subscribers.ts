@@ -3,21 +3,38 @@ import type { Service } from '@/types/tmf';
 
 const BASE = '/serviceInventoryManagement/v2';
 const enc = encodePath;
-
-function buildSubscriberFilter(raw: string | undefined): string | undefined {
-  const value = raw?.trim();
-  if (!value) return undefined;
-  // Mirror the legacy subscriber grid filter syntax. The backend only accepts
-  // Vaadin-style expressions here; passing `filter=<plain text>` returns 400.
-  return `"[{id.like=[${value}%]}]"`;
-}
+const LIST_PAGE_SIZE = 200;
 
 export const subscribersApi = {
-  list(start = 0, end = 49, filter?: string): Promise<PagedResult<Service>> {
+  list(start = 0, end = 49): Promise<PagedResult<Service>> {
     return getList<Service>(`${BASE}/service`, {
       headers: rangeHeader(start, end),
-      params: filter ? { filter: buildSubscriberFilter(filter) } : undefined,
     });
+  },
+  async listAll(): Promise<PagedResult<Service>> {
+    const items: Service[] = [];
+    let start = 0;
+    let total: number | undefined;
+
+    while (true) {
+      const page = await subscribersApi.list(start, start + LIST_PAGE_SIZE - 1);
+      items.push(...page.items);
+      total = page.contentRange?.total ?? page.total ?? total;
+
+      if (!page.items.length) break;
+      if (typeof total === 'number' && items.length >= total) break;
+      if (page.items.length < LIST_PAGE_SIZE) break;
+
+      start += LIST_PAGE_SIZE;
+    }
+
+    return {
+      items,
+      total: total ?? items.length,
+      contentRange: items.length
+        ? { start: 0, end: items.length - 1, total: total ?? items.length }
+        : { start: 0, end: 0, total: total ?? 0 },
+    };
   },
   get(id: string): Promise<Service> {
     return http.get<Service>(`${BASE}/service/${enc(id)}`).then((r) => r.data);
