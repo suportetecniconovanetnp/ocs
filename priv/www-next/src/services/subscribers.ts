@@ -4,11 +4,19 @@ import type { Service } from '@/types/tmf';
 const BASE = '/serviceInventoryManagement/v2';
 const enc = encodePath;
 
+function buildSubscriberFilter(raw: string | undefined): string | undefined {
+  const value = raw?.trim();
+  if (!value) return undefined;
+  // Mirror the legacy subscriber grid filter syntax. The backend only accepts
+  // Vaadin-style expressions here; passing `filter=<plain text>` returns 400.
+  return `"[{id.like=[${value}%]}]"`;
+}
+
 export const subscribersApi = {
   list(start = 0, end = 49, filter?: string): Promise<PagedResult<Service>> {
     return getList<Service>(`${BASE}/service`, {
       headers: rangeHeader(start, end),
-      params: filter ? { filter } : undefined,
+      params: filter ? { filter: buildSubscriberFilter(filter) } : undefined,
     });
   },
   get(id: string): Promise<Service> {

@@ -19,6 +19,7 @@ const page = ref(1);
 const itemsPerPage = ref(25);
 const search = ref('');
 const expanded = ref<string[]>([]);
+const lastKnownTotal = ref<number | null>(null);
 const editing = ref<Service | null>(null);
 const formDialog = ref<InstanceType<typeof SubscriberFormDialog> | null>(null);
 const trafficDialog = ref<InstanceType<typeof SubscriberTrafficDialog> | null>(null);
@@ -36,15 +37,31 @@ const deleteMessage = computed(() => {
 });
 
 const range = computed(() => {
-  const start = (page.value - 1) * itemsPerPage.value;
-  return { start, end: start + itemsPerPage.value - 1 };
+  const showAll = itemsPerPage.value === -1;
+  const effectivePageSize = showAll ? Math.max(lastKnownTotal.value ?? 0, 1_000) : itemsPerPage.value;
+  const start = showAll ? 0 : (page.value - 1) * effectivePageSize;
+  return { start, end: start + effectivePageSize - 1 };
 });
 
 const subscribers = useAsyncResource(() =>
   subscribersApi.list(range.value.start, range.value.end, search.value || undefined),
 );
 
-watch([page, itemsPerPage], () => void subscribers.reload());
+watch([page, itemsPerPage], ([, nextItemsPerPage]) => {
+  if (nextItemsPerPage === -1 && page.value !== 1) {
+    page.value = 1;
+    return;
+  }
+  void subscribers.reload();
+});
+
+watch(
+  () => subscribers.data.value,
+  (result) => {
+    const nextTotal = result?.contentRange?.total ?? result?.total;
+    if (typeof nextTotal === 'number') lastKnownTotal.value = nextTotal;
+  },
+);
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 watch(search, () => {
@@ -56,7 +73,17 @@ watch(search, () => {
 });
 
 const total = computed(
-  () => subscribers.data.value?.contentRange?.total ?? subscribers.data.value?.total ?? 0,
+  () => {
+    const result = subscribers.data.value;
+    const exact = result?.contentRange?.total ?? result?.total;
+    if (typeof exact === 'number') return exact;
+
+    const count = result?.items.length ?? 0;
+    if (itemsPerPage.value === -1) return count;
+
+    const start = (page.value - 1) * itemsPerPage.value;
+    return count === itemsPerPage.value ? start + count + 1 : start + count;
+  },
 );
 
 const headers = [
