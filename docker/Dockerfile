@@ -16,6 +16,7 @@ RUN sed -i 's|deb.debian.org/debian|archive.debian.org/debian|g; s|deb.debian.or
         automake \
         build-essential \
         ca-certificates \
+        erlang-mochiweb \
         curl \
         git \
         libssl-dev \
@@ -38,9 +39,8 @@ RUN aclocal \
     && automake --add-missing
 
 RUN mkdir -p "${BUILD_ROOT}/lib" "${STAGE_ROOT}${OCS_HOME}/lib" \
-    && git clone --depth 1 https://github.com/mochi/mochiweb.git "${BUILD_ROOT}/mochiweb" \
-    && make -C "${BUILD_ROOT}/mochiweb" all \
-    && MOCHIWEB_APP="$(find "${BUILD_ROOT}/mochiweb" -type f -path '*/ebin/mochiweb.app' | head -n 1)" \
+    && MOCHIWEB_APP="$(find /usr/lib/erlang/lib /usr/local/lib/erlang/lib -type f -path '*/mochiweb*/ebin/mochiweb.app' 2>/dev/null | head -n 1)" \
+    && test -n "${MOCHIWEB_APP}" \
     && MOCHIWEB_VERSION="$(sed -n 's/.*vsn, *\"\([^\"]*\)\".*/\1/p' "${MOCHIWEB_APP}" | head -n 1)" \
     && cp -R "$(dirname "$(dirname "${MOCHIWEB_APP}")")" "${STAGE_ROOT}${OCS_HOME}/lib/mochiweb-${MOCHIWEB_VERSION}" \
     && export ERL_LIBS="${STAGE_ROOT}${OCS_HOME}/lib" \
