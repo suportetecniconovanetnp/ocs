@@ -16,6 +16,10 @@ const logs = useAsyncResource(() => logsApi.access(range.value.start, range.valu
 watch([page, itemsPerPage], () => void logs.reload());
 
 const total = computed(() => logs.data.value?.contentRange?.total ?? logs.data.value?.total ?? 0);
+watch(total, (nextTotal) => {
+  const maxPage = Math.max(1, Math.ceil(nextTotal / itemsPerPage.value));
+  if (page.value > maxPage) page.value = maxPage;
+});
 
 const headers = [
   { title: 'Date', key: 'date' },

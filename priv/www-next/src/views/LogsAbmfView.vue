@@ -63,6 +63,10 @@ watch(
 const total = computed(
   () => logs.data.value?.contentRange?.total ?? logs.data.value?.total ?? 0,
 );
+watch(total, (nextTotal) => {
+  const maxPage = Math.max(1, Math.ceil(nextTotal / itemsPerPage.value));
+  if (page.value > maxPage) page.value = maxPage;
+});
 
 /**
  * Format a Quantity from an ABMF event, with units-aware rendering.
