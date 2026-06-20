@@ -6,14 +6,23 @@ import { characteristic, characteristicNumber, type Usage } from '@/types/tmf';
 
 const page = ref(1);
 const itemsPerPage = ref(50);
+const etag = ref<string>();
 
 const range = computed(() => {
   const start = (page.value - 1) * itemsPerPage.value;
   return { start, end: start + itemsPerPage.value - 1 };
 });
 
-const logs = useAsyncResource(() => logsApi.accounting(range.value.start, range.value.end));
+const logs = useAsyncResource(() =>
+  logsApi.accounting(range.value.start, range.value.end, undefined, page.value > 1 ? etag.value : undefined),
+);
 watch([page, itemsPerPage], () => void logs.reload());
+watch(
+  () => logs.data.value?.etag,
+  (nextEtag) => {
+    if (nextEtag) etag.value = nextEtag;
+  },
+);
 
 const total = computed(() => logs.data.value?.contentRange?.total ?? logs.data.value?.total ?? 0);
 watch(total, (nextTotal) => {
@@ -60,6 +69,7 @@ const rows = computed(() => (logs.data.value?.items ?? []).map(row));
           v-model:page="page"
           :items="rows"
           :items-length="total"
+          :items-per-page-options="[25, 50, 100, 200]"
           :headers="headers"
           :loading="logs.loading.value"
           density="compact"

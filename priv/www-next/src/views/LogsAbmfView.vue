@@ -18,6 +18,7 @@ const { date, bytes, duration, money, number } = useFormatters();
 
 const page = ref(1);
 const itemsPerPage = ref(50);
+const etag = ref<string>();
 
 // Filter inputs (debounced via watch → setTimeout). Empty strings mean
 // "no filter on that path" — the logsApi layer drops them from the
@@ -42,10 +43,16 @@ const logs = useAsyncResource(() =>
     bucket: filterBucket.value || undefined,
     units: filterUnits.value || undefined,
     product: filterProduct.value || undefined,
-  }),
+  }, page.value > 1 ? etag.value : undefined),
 );
 
 watch([page, itemsPerPage], () => void logs.reload());
+watch(
+  () => logs.data.value?.etag,
+  (nextEtag) => {
+    if (nextEtag) etag.value = nextEtag;
+  },
+);
 
 // Debounce filter inputs so we don't fire a request per keystroke.
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -233,6 +240,7 @@ function clearFilters() {
           v-model:page="page"
           :items="rows"
           :items-length="total"
+          :items-per-page-options="[25, 50, 100, 200]"
           :headers="headers"
           :loading="logs.loading.value"
           density="compact"

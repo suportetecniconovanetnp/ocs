@@ -41,6 +41,7 @@ export interface PagedResult<T> {
   items: T[];
   total?: number;
   contentRange?: { start: number; end: number; total?: number };
+  etag?: string;
 }
 
 const RANGE_RE = /items\s+(\d+)-(\d+)\/(\d+|\*)/i;
@@ -188,12 +189,14 @@ export async function getList<T>(url: string, config?: AxiosRequestConfig): Prom
       items: [],
       total: contentRange?.total ?? 0,
       contentRange,
+      etag: response.headers['etag'] as string | undefined,
     };
   }
   return {
     items: response.data,
     total: Number(response.headers['x-total-count']) || undefined,
     contentRange: parseContentRange(response.headers['content-range'] as string | undefined),
+    etag: response.headers['etag'] as string | undefined,
   };
 }
 

@@ -118,15 +118,21 @@ export interface AbmfQuery {
 }
 
 export const logsApi = {
-  access(start = 0, end = 99, query?: UsageQuery): Promise<PagedResult<Usage>> {
+  access(start = 0, end = 99, query?: UsageQuery, ifRange?: string): Promise<PagedResult<Usage>> {
     return getList<Usage>(USAGE_BASE, {
-      headers: rangeHeader(start, end),
+      headers: {
+        ...rangeHeader(start, end),
+        ...(ifRange ? { 'If-Range': ifRange } : {}),
+      },
       params: buildParams('AAAAccessUsage', query),
     });
   },
-  accounting(start = 0, end = 99, query?: UsageQuery): Promise<PagedResult<Usage>> {
+  accounting(start = 0, end = 99, query?: UsageQuery, ifRange?: string): Promise<PagedResult<Usage>> {
     return getList<Usage>(USAGE_BASE, {
-      headers: rangeHeader(start, end),
+      headers: {
+        ...rangeHeader(start, end),
+        ...(ifRange ? { 'If-Range': ifRange } : {}),
+      },
       params: buildParams('AAAAccountingUsage', query),
     });
   },
@@ -136,7 +142,7 @@ export const logsApi = {
    * the server-side allowlist in `ocs_rest_res_balance:get_balance_log/2`
    * (date, type, subscriber, bucket, units, product).
    */
-  abmf(start = 0, end = 99, query?: AbmfQuery): Promise<PagedResult<AbmfEvent>> {
+  abmf(start = 0, end = 99, query?: AbmfQuery, ifRange?: string): Promise<PagedResult<AbmfEvent>> {
     const params: Record<string, string> = {};
     if (query?.date) params['date'] = query.date;
     const filter = query
@@ -150,7 +156,10 @@ export const logsApi = {
       : undefined;
     if (filter) params['filter'] = filter;
     return getList<AbmfEvent>(ABMF_LOG, {
-      headers: rangeHeader(start, end),
+      headers: {
+        ...rangeHeader(start, end),
+        ...(ifRange ? { 'If-Range': ifRange } : {}),
+      },
       params,
     });
   },
