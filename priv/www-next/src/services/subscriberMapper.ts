@@ -1,5 +1,6 @@
 import type { Characteristic, Service, Quantity } from '@/types/tmf';
 import { parseDuration, formatDuration } from '@/composables/useDuration';
+import { backendDateToLocalInput, localInputToBackendDate } from '@/dateTime';
 
 /* ------------------------------------------------------------------ *
  * Form shapes
@@ -119,12 +120,9 @@ export function emptySubscriberForm(): SubscriberForm {
  * Convert the form's local datetime strings into the optional `validFor`
  * payload accepted by `balanceApi.topup`/`adjustment`.
  *
- * IMPORTANT: SigScale's `ocs_rest:iso8601/1` parser is wall-clock and
- * does NOT accept the `Z` UTC designator (it tokenises on `:`/`.` and
- * feeds each piece to `list_to_integer/1`, so `"...000Z"` blows up with
- * `badarg`, surfaced as `400 "Exception occurred parsing request body"`).
- * The legacy Polymer UI worked because it sent the raw `YYYY-MM-DDTHH:MM`
- * string from `<input type="datetime-local">`. We do the same here.
+ * The browser input is local time. We convert it to the backend's UTC
+ * wall-clock format (`YYYY-MM-DDTHH:MM`, no trailing `Z`) because the
+ * Erlang REST parser rejects timezone suffixes.
  *
  * Returns undefined when neither field is set, matching the
  * "no validity = unlimited" backend default.
@@ -132,20 +130,13 @@ export function emptySubscriberForm(): SubscriberForm {
 export function buildCreditValidFor(
   credit: SubscriberFormCredit,
 ): { startDateTime?: string; endDateTime?: string } | undefined {
-  const start = sanitizeBackendDate(credit.validFrom);
-  const end = sanitizeBackendDate(credit.validTo);
+  const start = localInputToBackendDate(credit.validFrom);
+  const end = localInputToBackendDate(credit.validTo);
   if (!start && !end) return undefined;
   return {
     ...(start && { startDateTime: start }),
     ...(end && { endDateTime: end }),
   };
-}
-
-function sanitizeBackendDate(local: string): string | undefined {
-  if (!local) return undefined;
-  const d = new Date(local);
-  if (Number.isNaN(d.getTime())) return undefined;
-  return local.endsWith('Z') ? local.slice(0, -1) : local;
 }
 
 /* ------------------------------------------------------------------ *
@@ -198,9 +189,11 @@ export function buildServicePayload(
     isServiceEnabled: form.authz.enabled,
   };
   const state = lifecycleToState(form.product.lifecycleLabel);
+  const startDate = localInputToBackendDate(form.product.startDate);
+  const endDate = localInputToBackendDate(form.product.endDate);
   if (state) payload.state = state;
-  if (form.product.startDate) payload.startDate = form.product.startDate;
-  if (form.product.endDate) payload.endDate = form.product.endDate;
+  if (startDate) payload.startDate = startDate;
+  if (endDate) payload.endDate = endDate;
 
   // Attach an existing product directly to the service (skips product creation).
   if (mode === 'create' && form.product.existingProductId) {
@@ -301,14 +294,6 @@ function stateToLabel(state: Service['state'] | undefined): string {
   return match?.label ?? 'Active';
 }
 
-function isoLocal(value: string | undefined): string {
-  if (!value) return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 export function parseSubscriber(svc: Service): SubscriberForm {
   const chars = svc.serviceCharacteristic;
   const intervalRaw = lookup(chars, 'acctSessionInterval');
@@ -318,8 +303,11 @@ export function parseSubscriber(svc: Service): SubscriberForm {
       offeringId: '',
       existingProductId: '',
       lifecycleLabel: stateToLabel(svc.state),
-      startDate: '',
-      endDate: '',
+      startDate: backendDateToLocalInput((svc as Service & { startDate?: string }).startDate),
+      endDate: backendDateToLocalInput(
+        (svc as Service & { endDate?: string; terminationDate?: string }).endDate ??
+          (svc as Service & { terminationDate?: string }).terminationDate,
+      ),
       currentProductId: svc.product ?? svc.productId ?? '',
       switchProduct: false,
       deleteOrphanIfEmpty: true,

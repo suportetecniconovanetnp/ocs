@@ -8,6 +8,7 @@ import type {
 } from '@/types/tmf';
 import { buildUnitOfMeasure, parseUnitOfMeasure, type PriceUnit } from '@/composables/useUnitOfMeasure';
 import { parseDuration, formatDuration } from '@/composables/useDuration';
+import { backendDateToLocalInput, localInputToBackendDate } from '@/dateTime';
 import {
   isPeriodAllowed,
   isPlaAllowed,
@@ -176,9 +177,11 @@ const SPEC_REF_TIME = { id: '3', href: '/catalogManagement/v2/productSpecificati
 const SPEC_REF_TARIFF = { id: '5', href: '/catalogManagement/v2/productSpecification/5' };
 
 function maybeValidFor(start: string, end: string): ValidFor | undefined {
-  if (start && end) return { startDateTime: start, endDateTime: end };
-  if (start) return { startDateTime: start };
-  if (end) return { endDateTime: end };
+  const startDateTime = localInputToBackendDate(start);
+  const endDateTime = localInputToBackendDate(end);
+  if (startDateTime && endDateTime) return { startDateTime, endDateTime };
+  if (startDateTime) return { startDateTime };
+  if (endDateTime) return { endDateTime };
   return undefined;
 }
 
@@ -423,14 +426,6 @@ export function buildOfferingPayload(form: OfferingForm): Partial<ProductOfferin
  * Parse an existing offering back into the form shape (for edit mode)
  * ------------------------------------------------------------------ */
 
-function isoLocal(value: string | undefined | null): string {
-  if (!value) return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 function detectProductSpec(spec: ProductOffering['productSpecification']): ProductSpecKind {
   if (!spec) return '';
   if (spec.id === '8') return 'data';
@@ -448,8 +443,8 @@ function parseAlteration(a: ProductOfferPriceAlteration): PriceAlterationForm {
   return {
     name: a.name ?? '',
     description: a.description ?? '',
-    startDate: isoLocal(a.validFor?.startDateTime),
-    endDate: isoLocal(a.validFor?.endDateTime),
+    startDate: backendDateToLocalInput(a.validFor?.startDateTime),
+    endDate: backendDateToLocalInput(a.validFor?.endDateTime),
     type: a.priceType ?? '',
     unit: uom.unit,
     size: uom.size,
@@ -481,8 +476,8 @@ function parsePrice(p: ProductOfferingPrice): PriceForm {
   return {
     name: p.name ?? '',
     description: p.description ?? '',
-    startDate: isoLocal(p.validFor?.startDateTime),
-    endDate: isoLocal(p.validFor?.endDateTime),
+    startDate: backendDateToLocalInput(p.validFor?.startDateTime),
+    endDate: backendDateToLocalInput(p.validFor?.endDateTime),
     type: p.priceType ?? '',
     pla: p.pricingLogicAlgorithm?.[0]?.href ?? '',
     unit,
@@ -524,8 +519,8 @@ export function parseOffering(offering: ProductOffering): OfferingForm {
       productSpec: detectProductSpec(offering.productSpecification),
       isBundle: Boolean(offering.isBundle),
       bundledIds: offering.bundledProductOffering?.map((b) => b.id) ?? [],
-      startDate: isoLocal(offering.validFor?.startDateTime),
-      endDate: isoLocal(offering.validFor?.endDateTime),
+      startDate: backendDateToLocalInput(offering.validFor?.startDateTime),
+      endDate: backendDateToLocalInput(offering.validFor?.endDateTime),
       lifecycleStatus: offering.lifecycleStatus ?? 'Active',
     },
     characteristics: {

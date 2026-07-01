@@ -1,4 +1,5 @@
 import { useI18n } from 'vue-i18n';
+import { parseBackendDate } from '@/dateTime';
 
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'] as const;
 const SECONDS_UNITS: { unit: number; label: string }[] = [
@@ -13,15 +14,15 @@ export function useFormatters() {
 
   function date(input: string | number | Date | undefined | null): string {
     if (input == null || input === '') return '—';
-    const d = input instanceof Date ? input : new Date(input);
-    if (Number.isNaN(d.getTime())) return String(input);
+    const d = parseBackendDate(input);
+    if (!d || Number.isNaN(d.getTime())) return String(input);
     return d.toLocaleString(locale.value);
   }
 
   function dateOnly(input: string | number | Date | undefined | null): string {
     if (input == null || input === '') return '—';
-    const d = input instanceof Date ? input : new Date(input);
-    if (Number.isNaN(d.getTime())) return String(input);
+    const d = parseBackendDate(input);
+    if (!d || Number.isNaN(d.getTime())) return String(input);
     return d.toLocaleDateString(locale.value);
   }
 
