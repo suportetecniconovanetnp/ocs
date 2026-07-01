@@ -1,4 +1,5 @@
 import { getList, rangeHeader, type PagedResult } from './http';
+import { parseBackendDate } from '@/dateTime';
 import type { AbmfEvent, HttpEvent, Usage } from '@/types/tmf';
 
 const USAGE_BASE = '/usageManagement/v1/usage';
@@ -45,10 +46,10 @@ function buildParams(type: string, query: UsageQuery | undefined): Record<string
 /** Predicate used by callers that want to drop records outside a time window. */
 export function withinRange(usage: Usage, from?: string, to?: string): boolean {
   if (!usage.date) return true;
-  const ts = new Date(usage.date).getTime();
+  const ts = parseBackendDate(usage.date)?.getTime() ?? NaN;
   if (Number.isNaN(ts)) return true;
-  if (from && ts < new Date(from).getTime()) return false;
-  if (to && ts > new Date(to).getTime()) return false;
+  if (from && ts < (parseBackendDate(from)?.getTime() ?? NaN)) return false;
+  if (to && ts > (parseBackendDate(to)?.getTime() ?? NaN)) return false;
   return true;
 }
 

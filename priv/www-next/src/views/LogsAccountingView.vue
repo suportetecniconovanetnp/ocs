@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useFormatters } from '@/composables/useFormatters';
 import { logsApi } from '@/services';
 import { useAsyncResource } from '@/composables/useAsyncResource';
 import { characteristic, characteristicNumber, type Usage } from '@/types/tmf';
@@ -7,6 +8,7 @@ import { characteristic, characteristicNumber, type Usage } from '@/types/tmf';
 const page = ref(1);
 const itemsPerPage = ref(50);
 const etag = ref<string>();
+const { date } = useFormatters();
 
 const range = computed(() => {
   const start = (page.value - 1) * itemsPerPage.value;
@@ -43,7 +45,7 @@ const headers = [
 
 function row(item: Usage) {
   return {
-    date: item.date,
+    date: date(item.date),
     type: characteristic(item, 'type') ?? item.status ?? '—',
     username: characteristic(item, 'username'),
     imsi: characteristic(item, 'imsi'),
