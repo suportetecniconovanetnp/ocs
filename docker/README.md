@@ -47,7 +47,7 @@ defaults):
 | Retenção de log | `OCS_{ACCT,AUTH,ABMF}_LOG_SIZE_BYTES`, `OCS_{ACCT,AUTH,ABMF}_LOG_FILE_COUNT` |
 | TLS | `OCS_TLS_KEY`, `OCS_TLS_CERT`, `OCS_TLS_CACERT` |
 | Mnesia / SNMP | `OCS_MNESIA_DIR`, `OCS_SNMP_CONF_DIR`, `OCS_SNMP_DB_DIR` |
-| Charging | `OCS_MIN_RESERVE_*`, `OCS_EXPLICIT_RESERVE_*`, `OCS_MAX_RESERVE_*`, `OCS_SESSION_DEBUG_LOGS` |
+| Charging | `OCS_MIN_RESERVE_*`, `OCS_CHARGING_SCHEDULER_TIME`, `OCS_CHARGING_INTERVAL`, `OCS_EXPLICIT_RESERVE_*`, `OCS_MAX_RESERVE_*`, `OCS_SESSION_DEBUG_LOGS` |
 | Bootstrap | `OCS_INIT_DB`, `OCS_NODENAME`, `OCS_DEBUG` |
 | Compose | `OCS_IMAGE`, `OCS_HOSTNAME`, `OCS_BIND_HOST`, `OCS_DATA_DIR`, `OCS_*_PORT_HOST` |
 
@@ -112,6 +112,8 @@ services:
       OCS_MIN_RESERVE_OCTETS: "10000000"
       OCS_MIN_RESERVE_SECONDS: "60"
       OCS_MIN_RESERVE_MESSAGES: "1"
+      OCS_CHARGING_SCHEDULER_TIME: "{3,5,0}"
+      OCS_CHARGING_INTERVAL: "1440"
       OCS_MAX_RESERVE_OCTETS: "undefined"
       OCS_MAX_RESERVE_SECONDS: "undefined"
       OCS_MAX_RESERVE_MESSAGES: "undefined"
@@ -167,6 +169,26 @@ services:
 O entrypoint detecta a variável e usa o arquivo do host inteiro em vez do
 template, normalizando placeholders `lib/@PACKAGE@-@VERSION@/...` e
 `lib/ocs-3.4.X/...` para a release instalada.
+
+## Scheduler de renovacao recorrente
+
+As renovacoes de produtos recorrentes sao controladas por duas variaveis:
+
+- `OCS_CHARGING_SCHEDULER_TIME`: tupla Erlang `{H,M,S}` em UTC que define o
+  ponto de ancoragem da agenda.
+- `OCS_CHARGING_INTERVAL`: intervalo, em minutos, entre as execucoes do job.
+
+Exemplos:
+
+- Rodar 1x por dia as `00:05` em `America/Belem` (`UTC-03`):
+  `OCS_CHARGING_SCHEDULER_TIME={3,5,0}` e `OCS_CHARGING_INTERVAL=1440`
+- Rodar de hora em hora:
+  `OCS_CHARGING_SCHEDULER_TIME={0,0,0}` e `OCS_CHARGING_INTERVAL=60`
+- Rodar a cada 15 minutos:
+  `OCS_CHARGING_SCHEDULER_TIME={0,0,0}` e `OCS_CHARGING_INTERVAL=15`
+
+O job e agendado em UTC pela aplicacao. Se quiser horario local, converta o
+horario desejado para UTC antes de preencher `OCS_CHARGING_SCHEDULER_TIME`.
 
 ## Build
 
