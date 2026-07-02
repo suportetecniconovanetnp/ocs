@@ -30,6 +30,7 @@ import { useAsyncResource } from '@/composables/useAsyncResource';
 import { characteristicNumber } from '@/types/tmf';
 import { useFormatters } from '@/composables/useFormatters';
 import { useDateRange, RANGE_OPTIONS } from '@/composables/useDateRange';
+import { parseBackendDate } from '@/dateTime';
 
 use([
   CanvasRenderer,
@@ -266,7 +267,7 @@ const trafficChart = computed(() => {
   }
 
   for (const usage of items) {
-    const ts = usage.date ? new Date(usage.date).getTime() : NaN;
+    const ts = parseBackendDate(usage.date)?.getTime() ?? NaN;
     if (Number.isNaN(ts)) continue;
     const slotKey = Math.floor(ts / widthMs) * widthMs;
     const slot = slots.get(slotKey) ?? { input: 0, output: 0 };

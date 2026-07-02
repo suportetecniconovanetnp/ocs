@@ -16,6 +16,7 @@ import { useAsyncResource } from '@/composables/useAsyncResource';
 import { useFormatters } from '@/composables/useFormatters';
 import { useDateRange, RANGE_OPTIONS } from '@/composables/useDateRange';
 import { characteristic, characteristicNumber, type Usage } from '@/types/tmf';
+import { parseBackendDate } from '@/dateTime';
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent, TitleComponent]);
 
@@ -144,7 +145,7 @@ const chartOption = computed(() => {
     slots.set(t, { input: 0, output: 0 });
   }
   for (const u of items) {
-    const ts = u.date ? new Date(u.date).getTime() : NaN;
+    const ts = parseBackendDate(u.date)?.getTime() ?? NaN;
     if (Number.isNaN(ts)) continue;
     const key = Math.floor(ts / widthMs) * widthMs;
     const slot = slots.get(key) ?? { input: 0, output: 0 };
