@@ -22,6 +22,13 @@ export interface UsageQuery {
   characteristic?: { name: string; value: string };
 }
 
+export interface UsageWindowQuery extends UsageQuery {
+  /** Page size used while scanning the newest accounting records. */
+  pageSize?: number;
+  /** Safety cap to avoid unbounded scans on very large datasets. */
+  maxPages?: number;
+}
+
 /**
  * SigScale's `usage` filter only accepts a small allowlist of characteristic
  * paths server-side (`nasIdentifier`, `imsi`, `msisdn` per the legacy UI).
@@ -134,8 +141,52 @@ export const logsApi = {
         ...rangeHeader(start, end),
         ...(ifRange ? { 'If-Range': ifRange } : {}),
       },
-      params: buildParams('AAAAccountingUsage', query),
+      params: {
+        ...buildParams('AAAAccountingUsage', query),
+        sort: '-date',
+      },
     });
+  },
+  async accountingWindow(query?: UsageWindowQuery): Promise<PagedResult<Usage>> {
+    const pageSize = query?.pageSize ?? 200;
+    const maxPages = query?.maxPages ?? 25;
+    const items: Usage[] = [];
+    const fromTs = parseBackendDate(query?.from)?.getTime() ?? NaN;
+    let start = 0;
+    let total: number | undefined;
+    let etag: string | undefined;
+
+    for (let page = 0; page < maxPages; page += 1) {
+      const response = await logsApi.accounting(
+        start,
+        start + pageSize - 1,
+        query,
+        start > 0 ? etag : undefined,
+      );
+      if (response.etag) etag = response.etag;
+      if (typeof response.contentRange?.total === 'number') total = response.contentRange.total;
+      items.push(...response.items);
+
+      if (!response.items.length) break;
+      if (response.items.length < pageSize) break;
+      if (typeof total === 'number' && items.length >= total) break;
+
+      const oldest = response.items[response.items.length - 1];
+      const oldestTs = parseBackendDate(oldest?.date)?.getTime() ?? NaN;
+      if (Number.isFinite(fromTs) && Number.isFinite(oldestTs) && oldestTs < fromTs) break;
+
+      start += pageSize;
+    }
+
+    const filtered = items.filter((usage) => withinRange(usage, query?.from, query?.to));
+    return {
+      items: filtered,
+      total,
+      contentRange: filtered.length
+        ? { start: 0, end: filtered.length - 1, total }
+        : { start: 0, end: 0, total: total ?? 0 },
+      etag,
+    };
   },
   /**
    * Balance-management audit log. One record per top-up / adjustment /

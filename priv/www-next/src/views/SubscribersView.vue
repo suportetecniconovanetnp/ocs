@@ -133,9 +133,14 @@ function topup(svc: Service) {
   topupDialog.value?.show(productId);
 }
 
-// Traffic history: filter accounting logs by the subscriber's serviceIdentity
-// (falls back to the service id when not set in characteristics).
+// Traffic history: prefer server-side filtering by IMSI. Fall back to the
+// service identity (or service id) only when the subscriber has no IMSI.
 function viewTraffic(svc: Service) {
+  const imsi = lookup(svc, 'imsi');
+  if (imsi) {
+    trafficDialog.value?.show(imsi, { name: 'imsi', value: imsi });
+    return;
+  }
   const identity = lookup(svc, 'serviceIdentity') || svc.id;
   trafficDialog.value?.show(identity);
 }

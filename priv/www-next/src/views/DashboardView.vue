@@ -24,7 +24,6 @@ import {
   uptime,
   schedulerUtilization,
   tableSize,
-  withinRange,
   DIAMETER_APPS,
 } from '@/services';
 import { useAsyncResource } from '@/composables/useAsyncResource';
@@ -62,22 +61,24 @@ const accountingPageSize = computed(() => {
   if (ms <= 24 * 3_600_000) return 500;
   return 1000;
 });
-// SigScale's usage endpoint doesn't support date-range filtering server-side
-// (only `?date=<prefix>` for exact-day match). We pull a wide page and clip
-// to the selected window client-side via `withinRange`.
-const accounting = useAsyncResource(() => logsApi.accounting(0, accountingPageSize.value - 1));
+// SigScale's usage endpoint doesn't support arbitrary date-range filters
+// server-side. We therefore page backwards from the newest records until the
+// requested window is covered, then chart only those in-range items.
+const accounting = useAsyncResource(() =>
+  logsApi.accountingWindow({
+    from: range.value.fromIso,
+    to: range.value.toIso,
+    pageSize: accountingPageSize.value,
+  }),
+);
 const health = useAsyncResource(() => healthApi.get());
 
-// Refetch accounting when the range widens (different page size).
-watch(accountingPageSize, () => void accounting.reload());
-
-// Items inside the selected window — every chart/stat that depends on the
-// range derives from this filtered list, no extra HTTP round-trips needed.
-const accountingInRange = computed(() =>
-  (accounting.data.value?.items ?? []).filter((u) =>
-    withinRange(u, range.value.fromIso, range.value.toIso),
-  ),
+watch(
+  () => [range.value.fromIso, range.value.toIso, accountingPageSize.value],
+  () => void accounting.reload(),
 );
+
+const accountingInRange = computed(() => accounting.data.value?.items ?? []);
 
 // Auto-refresh health using its own Cache-Control max-age (legacy behaviour).
 let healthTimer: ReturnType<typeof setTimeout> | undefined;

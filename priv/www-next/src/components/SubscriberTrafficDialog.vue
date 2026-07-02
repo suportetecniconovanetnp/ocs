@@ -11,7 +11,7 @@ import {
   TitleComponent,
 } from 'echarts/components';
 import { useTheme } from 'vuetify';
-import { logsApi, withinRange, matchesAnyIdentity, SUBSCRIBER_ID_CHARS } from '@/services';
+import { logsApi, matchesAnyIdentity, SUBSCRIBER_ID_CHARS } from '@/services';
 import { useAsyncResource } from '@/composables/useAsyncResource';
 import { useFormatters } from '@/composables/useFormatters';
 import { useDateRange, RANGE_OPTIONS } from '@/composables/useDateRange';
@@ -21,6 +21,7 @@ use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent
 
 const open = ref(false);
 const subscriberId = ref<string>('');
+const subscriberLookup = ref<{ name: string; value: string } | null>(null);
 const showAllRecords = ref(false);
 const theme = useTheme();
 const { date, bytes, duration, number } = useFormatters();
@@ -33,16 +34,19 @@ const pageSize = computed(() => {
   return 1000;
 });
 
-// SigScale's usage filter only accepts a small allowlist of characteristic
-// paths (nasIdentifier/imsi/msisdn). `username` is not server-filterable —
-// `logs.ts` silently drops it from the query and we filter client-side.
 const traffic = useAsyncResource(
-  () => logsApi.accounting(0, pageSize.value - 1),
+  () =>
+    logsApi.accountingWindow({
+      from: range.value.fromIso,
+      to: range.value.toIso,
+      pageSize: pageSize.value,
+      characteristic: subscriberLookup.value ?? undefined,
+    }),
   false,
 );
 
 watch(
-  () => [open.value, pageSize.value],
+  () => [open.value, subscriberId.value, range.value.fromIso, range.value.toIso, pageSize.value],
   () => {
     if (open.value && subscriberId.value) void traffic.reload();
   },
@@ -53,14 +57,11 @@ watch(
 const itemsForSubscriber = computed(() => {
   const all = traffic.data.value?.items ?? [];
   if (showAllRecords.value) return all;
+  if (subscriberLookup.value && subscriberLookup.value.name === 'imsi') return all;
   return all.filter((u) => matchesAnyIdentity(u, subscriberId.value));
 });
 
-const itemsInRange = computed(() =>
-  itemsForSubscriber.value.filter((u) =>
-    withinRange(u, range.value.fromIso, range.value.toIso),
-  ),
-);
+const itemsInRange = computed(() => itemsForSubscriber.value);
 
 // Diagnostic — which identifying characteristics ARE present in the fetched
 // records, so the user can see whether the dataset has any subscriber field
@@ -98,8 +99,9 @@ const distinctIdentities = computed(() => {
 
 const totalFetched = computed(() => traffic.data.value?.items.length ?? 0);
 
-function show(id: string) {
+function show(id: string, characteristic?: { name: string; value: string }) {
   subscriberId.value = id;
+  subscriberLookup.value = characteristic ?? null;
   open.value = true;
 }
 
@@ -229,6 +231,14 @@ const sessionRows = computed(() => itemsInRange.value.map(row));
         <v-icon icon="mdi-chart-timeline-variant" color="primary" class="mr-1" />
         Traffic history
         <v-chip size="small" variant="tonal">{{ subscriberId }}</v-chip>
+        <v-chip
+          v-if="subscriberLookup"
+          size="x-small"
+          variant="text"
+          class="text-medium-emphasis"
+        >
+          {{ subscriberLookup.name }}
+        </v-chip>
         <v-chip
           v-if="!traffic.loading.value && totalFetched > 0"
           size="x-small"
