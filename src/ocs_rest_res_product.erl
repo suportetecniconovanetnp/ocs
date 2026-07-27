@@ -535,7 +535,8 @@ patch_offer(OfferId, Etag, RequestBody) ->
 						[Offer1] when
 								Offer1#offer.last_modified == Etag2;
 								Etag2 == undefined ->
-							case catch ocs_rest:patch(Operations, offer(Offer1)) of
+							OfferNorm = ocs:normalize_offer(Offer1),
+							case catch ocs_rest:patch(Operations, offer(OfferNorm)) of
 								{struct, _} = Offer2  ->
 									case catch offer(Offer2) of
 										#offer{price = Price} = Offer3 ->
@@ -638,7 +639,8 @@ merge_patch_offer(OfferId, Etag, RequestBody) ->
 						[Offer1] when
 								Offer1#offer.last_modified == Etag2;
 								Etag2 == undefined ->
-							Offer2 = merge_patch(offer(Offer1), MergePatch),
+							OfferNorm = ocs:normalize_offer(Offer1),
+							Offer2 = merge_patch(offer(OfferNorm), MergePatch),
 							case catch offer(Offer2) of
 								#offer{price = Price} = Offer3 ->
 									F1 = fun F1([#price{type = tariff,
@@ -1575,7 +1577,7 @@ price_period("yearly") -> yearly.
 %% @doc CODEC for Product Offering.
 %% @private
 offer(#offer{} = Product) ->
-	offer(record_info(fields, offer), Product, []);
+	offer(record_info(fields, offer), ocs:normalize_offer(Product), []);
 offer({struct, ObjectMembers}) when is_list(ObjectMembers) ->
 	offer(ObjectMembers, #offer{}).
 %% @hidden
@@ -1585,8 +1587,9 @@ offer([description | T], #offer{description = Description} = P,
 	Acc) when is_list(Description) ->
 	offer(T, P, [{"description", Description} | Acc]);
 offer([specification | T],
-		#offer{specification = ProdSpecId} = P, Acc) when is_list(ProdSpecId) ->
-	Spec = product_spec_ref(ProdSpecId),
+		#offer{name = OfferId, specification = ProdSpecId} = P, Acc)
+		when is_list(ProdSpecId) ->
+	Spec = product_spec_ref(OfferId, ProdSpecId),
 	offer(T, P, [{"productSpecification", Spec} | Acc]);
 offer([bundle | T],
 		#offer{bundle = Bundle} = P, Acc) when length(Bundle) > 0 ->
@@ -1685,12 +1688,13 @@ offer([], #offer{bundle = L, specification = undefined} = Acc)
 		when length(L) > 0 ->
 	Acc.
 
--spec product_spec_ref(Id) -> Result
+-spec product_spec_ref(OfferId, SpecId) -> Result
 	when
-		Id :: string(),
+		OfferId :: string() | undefined,
+		SpecId :: string(),
 		Result :: {struct, [tuple()]}.
 %% @hidden
-product_spec_ref(ProdSpecId) ->
+product_spec_ref(OfferId, ProdSpecId) ->
 	case product_spec(ProdSpecId) of
 		{struct, L} ->
 			{_, Id} = lists:keyfind("id", 1, L),
@@ -1700,8 +1704,10 @@ product_spec_ref(ProdSpecId) ->
 					{struct, [{"id", Id}, {"href", Href}, {"name", Name}]};
 				_ ->
 					{struct, [{"id", Id}, {"href", Href}]}
-			end;
+				end;
 		{error, 404} ->
+			error_logger:warning_report(["Unknown product specification referenced by offer",
+					{offer, OfferId}, {product_specification, ProdSpecId}]),
 			{struct, [{"id", ProdSpecId},
 					{"href", ?productSpecPath ++ ProdSpecId}]}
 	end.

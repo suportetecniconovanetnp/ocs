@@ -66,11 +66,11 @@
 		end_date :: pos_integer() | undefined,
 		type :: product_price_type() | undefined,
 		period :: recur_period() | undefined,
-		month_day :: 1..31 | undefined,
 		units :: cents | octets | seconds | messages | undefined,
 		size :: integer() | undefined,
 		amount :: integer() | undefined,
-		currency :: string() | undefined}).
+		currency :: string() | undefined,
+		month_day :: 1..31 | undefined}).
 
 -record(char_value,
 		{default :: boolean() | undefined,
@@ -102,13 +102,13 @@
 		end_date :: pos_integer() | undefined,
 		type :: product_price_type() | undefined,
 		period :: recur_period() | undefined,
-		month_day :: 1..31 | undefined,
 		units :: cents | octets | seconds | messages | undefined,
 		size :: integer() | undefined,
 		amount :: integer() | undefined,
 		currency :: string() | undefined,
 		char_value_use = [] :: [#char_value_use{}],
-		alteration :: #alteration{} | undefined}).
+		alteration :: #alteration{} | undefined,
+		month_day :: 1..31 | undefined}).
 
 -record(pla_ref,
 		{id :: string() | undefined | '_',

@@ -45,8 +45,8 @@
 -export([statistics/1]).
 -export([start/4, start/5, stop/3, get_acct/1, get_auth/1]).
 %% export the ocs private API
--export([normalize/1, subscription/4, end_period/2, end_period/3,
-		payment_due_date/3]).
+-export([normalize/1, normalize_offer/1, subscription/4, end_period/2,
+		end_period/3, payment_due_date/3]).
 -export([parse_bucket/1]).
 
 -export_type([eap_method/0, match/0]).
@@ -593,6 +593,8 @@ add_product(OfferId, ServiceRefs, StartDate, EndDate, Characteristics)
 	F = fun() ->
 			case mnesia:read(offer, OfferId, read) of
 				[#offer{char_value_use = CharValueUse} = Offer] ->
+					Offer1 = normalize_offer(Offer),
+					CharValueUse = Offer1#offer.char_value_use,
 					F2 = fun(ServiceRef) ->
 								case mnesia:read(service, ServiceRef, write) of
 									[#service{product = undefined} = Service] ->
@@ -603,13 +605,13 @@ add_product(OfferId, ServiceRefs, StartDate, EndDate, Characteristics)
 									_ ->
 										mnesia:abort(service_not_found)
 								end
-					end,
-					ok = lists:foreach(F2, ServiceRefs),
-					NewChars = default_chars(CharValueUse, Characteristics),
-					Product1 = #product{id = Id, product = OfferId, start_date = StartDate,
-							end_date = EndDate, characteristics = NewChars,
-							service = ServiceRefs, last_modified = LM},
-					{Product2, Buckets} = subscription(Product1, Offer, [], true),
+						end,
+						ok = lists:foreach(F2, ServiceRefs),
+						NewChars = default_chars(CharValueUse, Characteristics),
+						Product1 = #product{id = Id, product = OfferId, start_date = StartDate,
+								end_date = EndDate, characteristics = NewChars,
+								service = ServiceRefs, last_modified = LM},
+						{Product2, Buckets} = subscription(Product1, Offer1, [], true),
 					F3 = fun(#bucket{} = B) -> ok = mnesia:write(bucket, B, write) end,
 					ok = lists:foreach(F3, Buckets),
 					ok = mnesia:write(Product2),
@@ -1709,7 +1711,7 @@ find_offer(OfferID) ->
 	F = fun() -> mnesia:read(offer, OfferID) end,
 	case mnesia:transaction(F) of
 		{atomic, [#offer{} = Offer]} ->
-			{ok, Offer};
+			{ok, normalize_offer(Offer)};
 		{atomic, []} ->
 			{error, not_found};
 		{aborted, Reason} ->
@@ -1733,12 +1735,12 @@ get_offers() ->
 			F({L, Cont}, Acc) ->
 				F(mnesia:select(Cont), [L | Acc])
 	end,
-	case mnesia:ets(F, [start, []]) of
-		{error, Reason} ->
-			{error, Reason};
-		{ok, Acc} when is_list(Acc) ->
-			lists:flatten(lists:reverse(Acc))
-	end.
+		case mnesia:ets(F, [start, []]) of
+			{error, Reason} ->
+				{error, Reason};
+			{ok, Acc} when is_list(Acc) ->
+				lists:map(fun normalize_offer/1, lists:flatten(lists:reverse(Acc)))
+		end.
 
 -spec delete_offer(OfferID) -> Result
 	when
@@ -1815,9 +1817,129 @@ query_offer1(Cont, _MatchSpec, Description, Status, STD, EDT, Price) ->
 	query_offer2(mnesia:ets(F), Description, Status, STD, EDT, Price).
 %% @hidden
 query_offer2({Offers, Cont}, '_', '_', '_', '_', '_') ->
-	{Cont, Offers};
+	{Cont, lists:map(fun normalize_offer/1, Offers)};
 query_offer2('$end_of_table', _Description, _Status, _STD, _EDT, _Price) ->
 	{eof, []}.
+
+-spec normalize_offer(Offer) -> Offer
+	when
+		Offer :: #offer{}.
+%% @doc Normalize persisted Offer data across price/alteration record layouts.
+normalize_offer(#offer{price = Prices} = Offer) when is_list(Prices) ->
+	Offer#offer{price = [normalize_price_record(Price) || Price <- Prices]};
+normalize_offer(#offer{} = Offer) ->
+	Offer.
+
+%% @hidden
+normalize_price_record(Price) when is_tuple(Price), element(1, Price) == price ->
+	case tuple_size(Price) of
+		13 ->
+			#price{name = element(2, Price),
+					description = element(3, Price),
+					start_date = element(4, Price),
+					end_date = element(5, Price),
+					type = element(6, Price),
+					period = element(7, Price),
+					units = element(8, Price),
+					size = element(9, Price),
+					amount = element(10, Price),
+					currency = element(11, Price),
+					char_value_use = element(12, Price),
+					alteration = normalize_alteration_record(element(13, Price)),
+					month_day = undefined};
+		14 ->
+			case element(13, Price) of
+				CharValueUse when is_list(CharValueUse) ->
+					#price{name = element(2, Price),
+							description = element(3, Price),
+							start_date = element(4, Price),
+							end_date = element(5, Price),
+							type = element(6, Price),
+							period = element(7, Price),
+							units = element(9, Price),
+							size = element(10, Price),
+							amount = element(11, Price),
+							currency = element(12, Price),
+							char_value_use = CharValueUse,
+							alteration = normalize_alteration_record(element(14, Price)),
+							month_day = element(8, Price)};
+				_ ->
+					#price{name = element(2, Price),
+							description = element(3, Price),
+							start_date = element(4, Price),
+							end_date = element(5, Price),
+							type = element(6, Price),
+							period = element(7, Price),
+							units = element(8, Price),
+							size = element(9, Price),
+							amount = element(10, Price),
+							currency = element(11, Price),
+							char_value_use = element(12, Price),
+							alteration = normalize_alteration_record(element(13, Price)),
+							month_day = element(14, Price)}
+			end
+	end.
+
+%% @hidden
+normalize_alteration_record(Alteration)
+		when is_tuple(Alteration), element(1, Alteration) == alteration ->
+	case tuple_size(Alteration) of
+		11 ->
+			#alteration{name = element(2, Alteration),
+					description = element(3, Alteration),
+					start_date = element(4, Alteration),
+					end_date = element(5, Alteration),
+					type = element(6, Alteration),
+					period = element(7, Alteration),
+					units = element(8, Alteration),
+					size = element(9, Alteration),
+					amount = element(10, Alteration),
+					currency = element(11, Alteration),
+					month_day = undefined};
+		12 ->
+			case {element(11, Alteration), element(12, Alteration)} of
+				{Amount, Currency} when is_integer(Amount), (is_list(Currency) orelse Currency == undefined) ->
+					#alteration{name = element(2, Alteration),
+							description = element(3, Alteration),
+							start_date = element(4, Alteration),
+							end_date = element(5, Alteration),
+							type = element(6, Alteration),
+							period = element(7, Alteration),
+							units = element(9, Alteration),
+							size = element(10, Alteration),
+							amount = Amount,
+							currency = Currency,
+							month_day = element(8, Alteration)};
+				{Currency, MonthDay}
+						when (is_list(Currency) orelse Currency == undefined),
+							(is_integer(MonthDay) orelse MonthDay == undefined) ->
+					#alteration{name = element(2, Alteration),
+							description = element(3, Alteration),
+							start_date = element(4, Alteration),
+							end_date = element(5, Alteration),
+							type = element(6, Alteration),
+							period = element(7, Alteration),
+							units = element(8, Alteration),
+							size = element(9, Alteration),
+							amount = element(10, Alteration),
+							currency = Currency,
+							month_day = MonthDay};
+				_ ->
+					#alteration{name = element(2, Alteration),
+							description = element(3, Alteration),
+							start_date = element(4, Alteration),
+							end_date = element(5, Alteration),
+							type = element(6, Alteration),
+							period = element(7, Alteration),
+							units = element(8, Alteration),
+							size = element(9, Alteration),
+							amount = element(10, Alteration),
+							currency = element(11, Alteration),
+							month_day = element(12, Alteration)}
+			end
+	end;
+normalize_alteration_record(Alteration) ->
+	Alteration.
 
 -spec add_resource(Resource) -> Result
 	when
@@ -3412,13 +3534,13 @@ subscription(#product{product = OfferId} = Product,
 		#offer{name = OfferId, bundle = Bundled, price = Prices} = _Offer,
 		Buckets, InitialFlag) when length(Bundled) > 0 ->
 	Now = erlang:system_time(millisecond),
-	F = fun(#bundled_po{name = P}, {Prod, B}) ->
-				case mnesia:read(offer, P, read) of
-					[Offer] ->
-						subscription(Prod, Offer, B, InitialFlag);
-					[] ->
-						throw(offer_not_found)
-				end
+		F = fun(#bundled_po{name = P}, {Prod, B}) ->
+					case mnesia:read(offer, P, read) of
+						[Offer] ->
+							subscription(Prod, normalize_offer(Offer), B, InitialFlag);
+						[] ->
+							throw(offer_not_found)
+					end
 	end,
 	{Product1, Buckets1} = lists:foldl(F, {Product, Buckets}, Bundled),
 	subscription(Product1, Now, InitialFlag, Buckets1, Prices).
