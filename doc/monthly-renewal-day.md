@@ -90,10 +90,11 @@ When `recurringChargeDayOfMonth` is not present:
 
 When `recurringChargeDayOfMonth` is present:
 
-- OCS moves to the next monthly cycle.
-- OCS attempts to use the configured calendar day.
-- If that day does not exist in the target month, OCS uses that month’s
-  last day.
+- OCS attempts to use the configured calendar day in the current month
+  when that day has not passed yet.
+- If the configured day has already passed, OCS moves to the next month.
+- If that day does not exist in the selected month, OCS uses that
+  month’s last day.
 
 This rule applies both to:
 

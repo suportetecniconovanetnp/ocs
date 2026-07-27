@@ -82,9 +82,9 @@ Changes:
 - Preserve the current `end_period(..., monthly)` path for legacy offers.
 - Add a fixed-day monthly calculation path when `recurringChargeDayOfMonth` is present.
 - Fixed-day logic:
-  - Move to the next monthly cycle.
-  - Attempt the configured calendar day.
-  - If that day does not exist, use the last day of that month.
+  - If the configured day has not passed yet in the current month, renew in the current month.
+  - Otherwise, renew in the next month.
+  - If that day does not exist, use the last day of the selected month.
 - Ensure this logic is used in both direct recurring charging and overdue recurring charge catch-up flows.
 
 ### 4. Data model review
@@ -173,6 +173,7 @@ Add or update tests for:
 6. Add/update frontend tests.
 7. Verify legacy monthly behavior is unchanged.
 
-## Open Question
+## Implementation Result
 
-The main design choice still to confirm during implementation is whether the internal record fields already have a safe extension point or whether `#price{}` / `#alteration{}` must be extended directly.
+The implementation extended `#price{}` and `#alteration{}` directly to carry
+the fixed monthly renewal day.
