@@ -47,7 +47,7 @@ defaults):
 | Retenção de log | `OCS_{ACCT,AUTH,ABMF}_LOG_SIZE_BYTES`, `OCS_{ACCT,AUTH,ABMF}_LOG_FILE_COUNT` |
 | TLS | `OCS_TLS_KEY`, `OCS_TLS_CERT`, `OCS_TLS_CACERT` |
 | Mnesia / SNMP | `OCS_MNESIA_DIR`, `OCS_SNMP_CONF_DIR`, `OCS_SNMP_DB_DIR` |
-| Charging | `OCS_MIN_RESERVE_*`, `OCS_CHARGING_SCHEDULER_TIME`, `OCS_CHARGING_INTERVAL`, `OCS_EXPLICIT_RESERVE_*`, `OCS_MAX_RESERVE_*`, `OCS_SESSION_DEBUG_LOGS` |
+| Charging | `OCS_MIN_RESERVE_*`, `OCS_CHARGING_SCHEDULER_TIME`, `OCS_CHARGING_INTERVAL`, `OCS_FORCE_MONTHLY_RENEWAL_*`, `OCS_EXPLICIT_RESERVE_*`, `OCS_MAX_RESERVE_*`, `OCS_SESSION_DEBUG_LOGS` |
 | Bootstrap | `OCS_INIT_DB`, `OCS_NODENAME`, `OCS_DEBUG` |
 | Compose | `OCS_IMAGE`, `OCS_HOSTNAME`, `OCS_BIND_HOST`, `OCS_DATA_DIR`, `OCS_*_PORT_HOST` |
 
@@ -114,6 +114,9 @@ services:
       OCS_MIN_RESERVE_MESSAGES: "1"
       OCS_CHARGING_SCHEDULER_TIME: "{3,5,0}"
       OCS_CHARGING_INTERVAL: "1440"
+      OCS_FORCE_MONTHLY_RENEWAL_ENABLED: "true"
+      OCS_FORCE_MONTHLY_RENEWAL_DAY: "28"
+      OCS_FORCE_MONTHLY_RENEWAL_TIME: "{3,0,0}"
       OCS_MAX_RESERVE_OCTETS: "undefined"
       OCS_MAX_RESERVE_SECONDS: "undefined"
       OCS_MAX_RESERVE_MESSAGES: "undefined"
@@ -189,6 +192,30 @@ Exemplos:
 
 O job e agendado em UTC pela aplicacao. Se quiser horario local, converta o
 horario desejado para UTC antes de preencher `OCS_CHARGING_SCHEDULER_TIME`.
+
+## Override global de renovacao mensal
+
+Para realinhar renovacoes mensais legadas sem editar buckets em massa, use:
+
+- `OCS_FORCE_MONTHLY_RENEWAL_ENABLED`
+- `OCS_FORCE_MONTHLY_RENEWAL_DAY`
+- `OCS_FORCE_MONTHLY_RENEWAL_TIME`
+
+Exemplo:
+
+- `OCS_FORCE_MONTHLY_RENEWAL_ENABLED=true`
+- `OCS_FORCE_MONTHLY_RENEWAL_DAY=28`
+- `OCS_FORCE_MONTHLY_RENEWAL_TIME={3,0,0}`
+
+Regras:
+
+- a hora e interpretada em UTC
+- a regra vale apenas para recorrencia `monthly`
+- a regra so atua quando a oferta nao tem `month_day` explicito
+- se o dia configurado nao existir no mes, o OCS usa o ultimo dia do mes
+
+Se quiser pensar em horario local, converta antes para UTC e grave o valor
+ja convertido em `OCS_FORCE_MONTHLY_RENEWAL_TIME`.
 
 ## Build
 

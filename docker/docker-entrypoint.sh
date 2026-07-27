@@ -85,6 +85,9 @@ env_default OCS_MIN_RESERVE_SECONDS '60'
 env_default OCS_MIN_RESERVE_MESSAGES '1'
 env_default OCS_CHARGING_SCHEDULER_TIME '{4,4,4}'
 env_default OCS_CHARGING_INTERVAL '1440'
+env_default OCS_FORCE_MONTHLY_RENEWAL_ENABLED 'false'
+env_default OCS_FORCE_MONTHLY_RENEWAL_DAY '28'
+env_default OCS_FORCE_MONTHLY_RENEWAL_TIME '{3,0,0}'
 env_default OCS_EXPLICIT_RESERVE_POLICY 'requested'
 env_default OCS_EXPLICIT_RESERVE_OCTETS 'undefined'
 env_default OCS_EXPLICIT_RESERVE_SECONDS 'undefined'
@@ -181,6 +184,9 @@ render_sys_config() {
       {min_reserve_messages, ${OCS_MIN_RESERVE_MESSAGES}},
       {charging_scheduler_time, ${OCS_CHARGING_SCHEDULER_TIME}},
       {charging_interval, ${OCS_CHARGING_INTERVAL}},
+      {force_monthly_renewal_enabled, ${OCS_FORCE_MONTHLY_RENEWAL_ENABLED}},
+      {force_monthly_renewal_day, ${OCS_FORCE_MONTHLY_RENEWAL_DAY}},
+      {force_monthly_renewal_time, ${OCS_FORCE_MONTHLY_RENEWAL_TIME}},
 
       %% Explicit peer request policy.
       {explicit_reserve_policy, ${OCS_EXPLICIT_RESERVE_POLICY}},
