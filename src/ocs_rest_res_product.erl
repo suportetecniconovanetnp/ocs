@@ -1586,11 +1586,7 @@ offer([description | T], #offer{description = Description} = P,
 	offer(T, P, [{"description", Description} | Acc]);
 offer([specification | T],
 		#offer{specification = ProdSpecId} = P, Acc) when is_list(ProdSpecId) ->
-	{struct, L} = product_spec(ProdSpecId),
-	{_, Id} = lists:keyfind("id", 1, L),
-	{_, Href} = lists:keyfind("href", 1, L),
-	Name = proplists:get_value("name", L),
-	Spec = {struct, [{"id", Id}, {"href", Href}, {"name", Name}]},
+	Spec = product_spec_ref(ProdSpecId),
 	offer(T, P, [{"productSpecification", Spec} | Acc]);
 offer([bundle | T],
 		#offer{bundle = Bundle} = P, Acc) when length(Bundle) > 0 ->
@@ -1688,6 +1684,27 @@ offer([], #offer{bundle = [], specification = S} = Acc)
 offer([], #offer{bundle = L, specification = undefined} = Acc)
 		when length(L) > 0 ->
 	Acc.
+
+-spec product_spec_ref(Id) -> Result
+	when
+		Id :: string(),
+		Result :: {struct, [tuple()]}.
+%% @hidden
+product_spec_ref(ProdSpecId) ->
+	case product_spec(ProdSpecId) of
+		{struct, L} ->
+			{_, Id} = lists:keyfind("id", 1, L),
+			{_, Href} = lists:keyfind("href", 1, L),
+			case proplists:get_value("name", L) of
+				Name when is_list(Name) ->
+					{struct, [{"id", Id}, {"href", Href}, {"name", Name}]};
+				_ ->
+					{struct, [{"id", Id}, {"href", Href}]}
+			end;
+		{error, 404} ->
+			{struct, [{"id", ProdSpecId},
+					{"href", ?productSpecPath ++ ProdSpecId}]}
+	end.
 
 -spec bundled_po(Bundled) -> Bundled
 	when

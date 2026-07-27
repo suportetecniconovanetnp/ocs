@@ -249,8 +249,9 @@ all() ->
 	add_client, add_client_without_password, get_client, get_client_id,
 	get_client_bogus, get_client_notfound, get_all_clients,
 	get_client_range, get_clients_filter, head_clients, delete_client,
-	update_client_password_json_patch, update_client_attributes_json_patch,
-	add_offer, get_offer, delete_offer, ignore_delete_offer, update_offer,
+		update_client_password_json_patch, update_client_attributes_json_patch,
+		add_offer, get_offer, get_offer_collection_unknown_spec,
+		delete_offer, ignore_delete_offer, update_offer,
 	add_service_inventory, add_service_inventory_without_password,
 	get_service_inventory, get_all_service_inventories, add_service_aka,
 	get_service_not_found, get_service_range, delete_service,
@@ -955,8 +956,41 @@ get_offer(Config) ->
 			{false, false} ->
 				true
 		end
+		end,
+		true = lists:all(F1, lists:zip(POP1, POP2)).
+
+get_offer_collection_unknown_spec() ->
+	[{userdata, [{doc, "List product offerings tolerates unknown product specifications"}]}].
+
+get_offer_collection_unknown_spec(Config) ->
+	HostUrl = ?config(host_url, Config),
+	HttpOpt = ?config(http_options, Config),
+	Accept = {"accept", "application/json"},
+	Range = {"range", "items=1-100"},
+	OfferId = ocs:generate_identity(),
+	Price = #price{name = ocs:generate_identity(), type = usage,
+			units = octets, size = 1024, amount = 1000000},
+	Offer = #offer{name = OfferId, specification = "99", price = [Price]},
+	{ok, _} = ocs:add_offer(Offer),
+	Request = {HostUrl ++ "/productCatalogManagement/v2/productOffering",
+			[Accept, auth_header(), Range]},
+	{ok, Result} = httpc:request(get, Request, HttpOpt, []),
+	{{"HTTP/1.1", 200, _OK}, _Headers, RespBody} = Result,
+	{array, Objects} = mochijson:decode(RespBody),
+	Pred = fun({struct, Object}) ->
+			case lists:keyfind("name", 1, Object) of
+				{"name", OfferId} ->
+					true;
+				_ ->
+					false
+			end
 	end,
-	true = lists:all(F1, lists:zip(POP1, POP2)).
+	[{struct, OfferObject}] = lists:filter(Pred, Objects),
+	{_, {struct, ProductSpecification}} = lists:keyfind("productSpecification", 1, OfferObject),
+	{"id", "99"} = lists:keyfind("id", 1, ProductSpecification),
+	{"href", "/productCatalogManagement/v2/productSpecification/99"}
+			= lists:keyfind("href", 1, ProductSpecification),
+	false = lists:keymember("name", 1, ProductSpecification).
 
 update_offer() ->
 	[{userdata, [{doc,"Use PATCH for update product offering entity"}]}].

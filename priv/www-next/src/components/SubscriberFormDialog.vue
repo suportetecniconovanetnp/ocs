@@ -50,6 +50,17 @@ const offeringItems = computed(() => [
   ...(offerings.data.value ?? []).map((o) => ({ title: o.name, value: o.id })),
 ]);
 
+const offeringHint = computed(() => {
+  if (offerings.loading.value) return 'Loading offerings…';
+  if (form.value.product.existingProductId) {
+    return 'Disabled because an existing product is picked below';
+  }
+  if (offerings.error.value) {
+    return 'Offering catalog unavailable. Type the product offering ID manually.';
+  }
+  return 'Pick an offering or type its ID. On save, a new product is created for this subscriber.';
+});
+
 // Lazy-loaded product inventory for the edit-mode "Change product" dropdown.
 // Same wide-page strategy as ProductsView — the Vaadin `id.like` filter
 // crashes on hyphens, so we fetch a generous page and filter client-side.
@@ -465,19 +476,17 @@ defineExpose({ show });
 
             <!-- ---- CREATE ONLY: create a new product from an offering ---- -->
             <template v-if="!isEdit">
-              <v-select
+              <v-combobox
                 v-model="form.product.offeringId"
                 :items="offeringItems"
+                item-title="title"
+                item-value="value"
                 label="Create new product from offering"
                 :loading="offerings.loading.value"
                 :disabled="!!form.product.existingProductId"
-                :hint="
-                  offerings.loading.value
-                    ? 'Loading offerings…'
-                    : form.product.existingProductId
-                      ? 'Disabled because an existing product is picked below'
-                      : 'On save, creates a new product bound to this subscriber'
-                "
+                :hint="offeringHint"
+                no-data-text="No offerings loaded. Type an offering ID manually."
+                clearable
                 persistent-hint
                 class="mb-3"
               />
