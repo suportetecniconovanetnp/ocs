@@ -91,6 +91,8 @@ all() ->
 			add_once_recurring_allowance,
 			add_recurring_allowance_bundle,
 			end_period_monthly_fixed_day,
+			end_period_monthly_forced_day_time,
+			recurring_charge_monthly_forced_alignment,
 			recurring_charge_monthly, recurring_charge_hourly,
 			recurring_charge_yearly, recurring_charge_daily].
 
@@ -710,6 +712,55 @@ end_period_monthly_fixed_day(_Config) ->
 	ExpectedApr2025 = ocs:end_period(Mar2025, monthly, 30),
 	ok.
 
+end_period_monthly_forced_day_time() ->
+	[{userdata, [{doc, "Global monthly renewal override aligns to configured UTC day and time"}]}].
+
+end_period_monthly_forced_day_time(_Config) ->
+	with_force_monthly_renewal_override(28, {3, 0, 0},
+			fun() ->
+				JanBefore = system_time({{2025, 1, 15}, {12, 0, 0}}),
+				ExpectedJan = system_time({{2025, 1, 28}, {3, 0, 0}}) - 1,
+				JanAfter = system_time({{2025, 1, 30}, {12, 0, 0}}),
+				ExpectedFeb = system_time({{2025, 2, 28}, {3, 0, 0}}) - 1,
+				ExpectedJan = ocs:end_period(JanBefore, monthly, undefined),
+				ExpectedFeb = ocs:end_period(JanAfter, monthly, undefined)
+			end).
+
+recurring_charge_monthly_forced_alignment() ->
+	[{userdata, [{doc, "Scheduler can realign monthly recurring charges to a forced UTC day and time"}]}].
+
+recurring_charge_monthly_forced_alignment(_Config) ->
+	Now = erlang:system_time(millisecond),
+	{{_Year, _Month, Day}, _Time} = date_time(Now),
+	OverrideTime = {0, 0, 0},
+	FutureDue = future_due_same_month(Now),
+	with_force_monthly_renewal_override(Day, OverrideTime,
+			fun() ->
+				SD = erlang:system_time(millisecond),
+				OfferId = ocs:generate_password(),
+				Amount = 100,
+				Price = recurring(SD, monthly, Amount, undefined),
+				Offer = #offer{name = OfferId, status = active,
+						specification = 8, price = [Price]},
+				{ok, _} = ocs:add_offer(Offer),
+				{ok, #product{id = ProdId} = Product} = ocs:add_product(OfferId, []),
+				ok = mnesia:dirty_write(product, Product#product{payment =
+						[{Price#price.name, FutureDue}]}),
+				Bucket = #bucket{units = cents, remain_amount = 10000000,
+						attributes = #{bucket_type => normal},
+						start_date = erlang:system_time(millisecond),
+						end_date = erlang:system_time(millisecond) + 2592000000},
+				{ok, _, #bucket{id = BucketId}} = ocs:add_bucket(ProdId, Bucket),
+				ok = ocs_scheduler:product_charge(),
+				{ok, #product{payment = Payments}} = ocs:find_product(ProdId),
+				{ok, #bucket{remain_amount = Remaining}} = ocs:find_bucket(BucketId),
+				ExpectedDue = ocs:end_period(FutureDue, monthly, undefined),
+				true = (Remaining == (10000000 - Amount)),
+				true = lists:any(fun({Name, DueDate}) ->
+						(Name == Price#price.name) andalso (DueDate == ExpectedDue)
+				end, Payments)
+			end).
+
 %%---------------------------------------------------------------------
 %%  Internal functions
 %%---------------------------------------------------------------------
@@ -743,3 +794,44 @@ alteration(SD, Type, Period, Units, Size, Amount) ->
 system_time(DateTime) ->
 	Seconds = calendar:datetime_to_gregorian_seconds(DateTime) - 62167219200,
 	erlang:convert_time_unit(Seconds, second, millisecond).
+
+date_time(MilliSeconds) ->
+	Seconds = 62167219200 + (MilliSeconds div 1000),
+	calendar:gregorian_seconds_to_datetime(Seconds).
+
+future_due_same_month(Now) ->
+	{{Year, Month, Day}, {Hour, Minute, Second}} = date_time(Now),
+	LastDay = calendar:last_day_of_the_month(Year, Month),
+	DateTime = case Day < LastDay of
+		true ->
+			{{Year, Month, Day + 1}, {12, 0, 0}};
+		false when Hour < 23 ->
+			{{Year, Month, Day}, {23, Minute, Second}};
+		false when Minute < 59 ->
+			{{Year, Month, Day}, {Hour, 59, Second}};
+		false ->
+			{{Year, Month, Day}, {Hour, Minute, 59}}
+	end,
+	system_time(DateTime).
+
+with_force_monthly_renewal_override(Day, Time, Fun) ->
+	PrevEnabled = application:get_env(ocs, force_monthly_renewal_enabled),
+	PrevDay = application:get_env(ocs, force_monthly_renewal_day),
+	PrevTime = application:get_env(ocs, force_monthly_renewal_time),
+	ok = application:set_env(ocs, force_monthly_renewal_enabled, true),
+	ok = application:set_env(ocs, force_monthly_renewal_day, Day),
+	ok = application:set_env(ocs, force_monthly_renewal_time, Time),
+	try
+		Fun()
+	after
+		restore_env(force_monthly_renewal_enabled, PrevEnabled),
+		restore_env(force_monthly_renewal_day, PrevDay),
+		restore_env(force_monthly_renewal_time, PrevTime)
+	end.
+
+restore_env(Key, {ok, Value}) ->
+	application:set_env(ocs, Key, Value);
+restore_env(Key, undefined) ->
+	application:unset_env(ocs, Key);
+restore_env(Key, error) ->
+	application:unset_env(ocs, Key).

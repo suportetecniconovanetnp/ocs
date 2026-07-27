@@ -89,7 +89,7 @@ product_charge1(ProdRef, Now) ->
 							BundledOfferPrices = lists:map(Fbundle, Bundle),
 							case if_recur(Prices ++ BundledOfferPrices) of
 								true ->
-									case if_dues(Payments, Now) of
+									case if_dues(Payments, Prices ++ BundledOfferPrices, Now) of
 										true ->
 											Buckets1 = [mnesia:read(bucket, B) || B <- BucketRefs],
 											Buckets2 = lists:flatten(Buckets1),
@@ -185,12 +185,35 @@ bucket_adjustment(ProductRef, OldBucketRefs, OldBuckets, NewBuckets) ->
 	DelBucketAdj ++ UpdatedBucketAdj.
 
 %% @private
-if_dues([{_, DueDate} | _], Now) when DueDate < Now ->
-	true;
-if_dues([_ | T], Now) ->
-	if_dues(T, Now);
-if_dues([], _Now)  ->
+if_dues([{Name, DueDate} | T], Prices, Now) ->
+	case price_schedule(Name, Prices) of
+		{Period, MonthDay} ->
+			case ocs:payment_due_date(DueDate, Period, MonthDay) < Now of
+				true ->
+					true;
+				false ->
+					if_dues(T, Prices, Now)
+			end;
+		undefined when DueDate < Now ->
+			true;
+		undefined ->
+			if_dues(T, Prices, Now)
+	end;
+if_dues([], _Prices, _Now)  ->
 	false.
+
+%% @private
+price_schedule(Name, [#price{name = Name, type = recurring, period = Period,
+		month_day = MonthDay} | _]) when Period /= undefined ->
+	{Period, MonthDay};
+price_schedule(Name, [#price{name = Name,
+		alteration = #alteration{type = recurring, period = Period,
+		month_day = MonthDay}} | _]) when Period /= undefined ->
+	{Period, MonthDay};
+price_schedule(Name, [_ | T]) ->
+	price_schedule(Name, T);
+price_schedule(_Name, []) ->
+	undefined.
 
 -spec if_recur(Prices) -> Result
 	when
@@ -264,4 +287,3 @@ start_delay(ScheduledTime, Interval) when Interval >= 1440 ->
 	Next = {ScheduleDay, ScheduledTime},
 	Now = calendar:datetime_to_gregorian_seconds({Date, Time}),
 	(calendar:datetime_to_gregorian_seconds(Next) - Now) * 1000.
-

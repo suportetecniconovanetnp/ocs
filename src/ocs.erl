@@ -45,7 +45,8 @@
 -export([statistics/1]).
 -export([start/4, start/5, stop/3, get_acct/1, get_auth/1]).
 %% export the ocs private API
--export([normalize/1, subscription/4, end_period/2, end_period/3]).
+-export([normalize/1, subscription/4, end_period/2, end_period/3,
+		payment_due_date/3]).
 -export([parse_bucket/1]).
 
 -export_type([eap_method/0, match/0]).
@@ -3572,20 +3573,26 @@ bucket_price(PriceName, []) ->
 dues(Payments, Now, Buckets, PName, Period, MonthDay, Amount, ProdRef) ->
 	dues(Payments, Now, Buckets, PName, Period, MonthDay, Amount, ProdRef, []).
 %% @hidden
-dues([{_, DueDate} = P | T], Now, Buckets, PName, Period, MonthDay, Amount, ProdRef, Acc) when DueDate > Now ->
+dues([{PriceName, _DueDate} = P | T], Now, Buckets, PName, Period,
+		MonthDay, Amount, ProdRef, Acc) when PriceName /= PName ->
 	dues(T, Now, Buckets, PName, Period, MonthDay, Amount, ProdRef, [P | Acc]);
-dues([{PName, DueDate} | T], Now, Buckets, PName, Period, MonthDay, Amount, ProdRef, Acc) ->
-	NewBuckets = charge(ProdRef, Amount, Buckets),
-	case end_period(DueDate, Period, MonthDay) of
-		NextDueDate when NextDueDate < Now ->
-			dues([{PName, NextDueDate} | T], Now,
-					NewBuckets, PName, Period, MonthDay, Amount, ProdRef, Acc);
-		NextDueDate ->
-			dues(T, Now, NewBuckets, PName, Period,
-					MonthDay, Amount, ProdRef, [{PName, NextDueDate} | Acc])
+dues([{PName, DueDate} | T], Now, Buckets, PName, Period, MonthDay,
+		Amount, ProdRef, Acc) ->
+	case payment_due_date(DueDate, Period, MonthDay) of
+		EffectiveDueDate when EffectiveDueDate > Now ->
+			dues(T, Now, Buckets, PName, Period, MonthDay, Amount,
+					ProdRef, [{PName, DueDate} | Acc]);
+		_ ->
+			NewBuckets = charge(ProdRef, Amount, Buckets),
+			case end_period(DueDate, Period, MonthDay) of
+				NextDueDate when NextDueDate < Now ->
+					dues([{PName, NextDueDate} | T], Now, NewBuckets,
+							PName, Period, MonthDay, Amount, ProdRef, Acc);
+				NextDueDate ->
+					dues(T, Now, NewBuckets, PName, Period, MonthDay,
+							Amount, ProdRef, [{PName, NextDueDate} | Acc])
+			end
 	end;
-dues([P | T], Now, Buckets, PName, Period, MonthDay, Amount, ProdRef, Acc) ->
-	dues(T, Now, Buckets, PName, Period, MonthDay, Amount, ProdRef, [P | Acc]);
 dues([], _Now, Buckets, _PName, _Period, _MonthDay, _Amount, _ProdRef, Acc) ->
 	{lists:reverse(Acc), Buckets}.
 
@@ -3750,8 +3757,33 @@ end_period(StartTime, Period) when is_integer(StartTime) ->
 end_period(StartTime, monthly, MonthDay)
 		when is_integer(StartTime), is_integer(MonthDay), MonthDay > 0, MonthDay =< 31 ->
 	end_month_day(date(StartTime), MonthDay);
+end_period(StartTime, monthly, undefined) when is_integer(StartTime) ->
+	case monthly_renewal_override() of
+		{Day, Time} ->
+			end_month_day(renewal_datetime(StartTime), Day, Time);
+		false ->
+			end_period(StartTime, monthly)
+	end;
 end_period(StartTime, Period, _MonthDay) when is_integer(StartTime) ->
 	end_period(StartTime, Period).
+
+-spec payment_due_date(DueDate, Period, MonthDay) -> EffectiveDueDate
+	when
+		DueDate :: non_neg_integer(),
+		Period :: hourly | daily | weekly | monthly | yearly,
+		MonthDay :: 1..31 | undefined,
+		EffectiveDueDate :: non_neg_integer().
+%% @doc Return the effective due date for the current recurring cycle.
+%% @private
+payment_due_date(DueDate, monthly, undefined) when is_integer(DueDate) ->
+	case monthly_renewal_override() of
+		{Day, Time} ->
+			current_month_day_due_date(renewal_datetime(DueDate), Day, Time);
+		false ->
+			DueDate
+	end;
+payment_due_date(DueDate, _Period, _MonthDay) when is_integer(DueDate) ->
+	DueDate.
 %% @hidden
 end_period1({Date, {23, Minute, Second}}, hourly) ->
 	NextDay = calendar:date_to_gregorian_days(Date) + 1,
@@ -3832,6 +3864,62 @@ end_month_day({{Year, Month, Day}, Time}, TargetDay) ->
 	end,
 	EndDate = {EndYear, EndMonth, EndDay},
 	gregorian_datetime_to_system_time({EndDate, Time}) - 1.
+
+%% @hidden
+end_month_day({{Year, Month, _Day}, _Time} = DateTime, TargetDay, TargetTime) ->
+	CandidateDateTime = month_day_datetime(Year, Month, TargetDay, TargetTime),
+	case datetime_lt(DateTime, CandidateDateTime) of
+		true ->
+			gregorian_datetime_to_system_time(CandidateDateTime) - 1;
+		false ->
+			{NextYear, NextMonth} = next_month(Year, Month),
+			NextDateTime = month_day_datetime(NextYear, NextMonth, TargetDay, TargetTime),
+			gregorian_datetime_to_system_time(NextDateTime) - 1
+	end.
+
+%% @hidden
+current_month_day_due_date({{Year, Month, _Day}, _Time}, TargetDay, TargetTime) ->
+	gregorian_datetime_to_system_time(
+			month_day_datetime(Year, Month, TargetDay, TargetTime)) - 1.
+
+%% @hidden
+month_day_datetime(Year, Month, TargetDay, TargetTime) ->
+	LastDay = calendar:last_day_of_the_month(Year, Month),
+	{{Year, Month, erlang:min(TargetDay, LastDay)}, TargetTime}.
+
+%% @hidden
+next_month(Year, 12) ->
+	{Year + 1, 1};
+next_month(Year, Month) ->
+	{Year, Month + 1}.
+
+%% @hidden
+datetime_lt(DateTime1, DateTime2) ->
+	calendar:datetime_to_gregorian_seconds(DateTime1)
+			< calendar:datetime_to_gregorian_seconds(DateTime2).
+
+%% @hidden
+renewal_datetime(MilliSeconds) when is_integer(MilliSeconds) ->
+	date(MilliSeconds + 1000).
+
+%% @hidden
+monthly_renewal_override() ->
+	case application:get_env(ocs, force_monthly_renewal_enabled, false) of
+		true ->
+			case {application:get_env(ocs, force_monthly_renewal_day),
+					application:get_env(ocs, force_monthly_renewal_time)} of
+				{{ok, Day}, {ok, {Hour, Minute, Second} = Time}}
+						when is_integer(Day), Day > 0, Day =< 31,
+						is_integer(Hour), Hour >= 0, Hour =< 23,
+						is_integer(Minute), Minute >= 0, Minute =< 59,
+						is_integer(Second), Second >= 0, Second =< 59 ->
+					{Day, Time};
+				_ ->
+					false
+			end;
+		_ ->
+			false
+	end.
 
 -spec default_chars(CharValueUse, ReqChars) -> NewChars
 	when

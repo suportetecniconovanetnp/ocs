@@ -16,6 +16,9 @@
       {abmf_log_dir, "log/abmf"},
       {ipdr_log_dir, "log/ipdr"},
       {export_dir, "log/export"},
+%      {force_monthly_renewal_enabled, true},
+%      {force_monthly_renewal_day, 28},
+%      {force_monthly_renewal_time, {3, 0, 0}}, % UTC only; convert local time before saving here.
       {tls_key, "ssl/key.pem"},
       {tls_cert, "ssl/cert.pem"},
       {tls_cacert, "ssl/ca.pem"}]},
