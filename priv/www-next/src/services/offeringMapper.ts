@@ -57,6 +57,7 @@ export interface PriceAlterationForm {
   amount: number | null;
   currency: string;
   period: string;
+  monthDay: number | null;
 }
 
 export interface PriceForm {
@@ -71,6 +72,7 @@ export interface PriceForm {
   amount: number | null;
   currency: string;
   period: string;
+  monthDay: number | null;
   alterationName: string;
   fixedPriceBucket: boolean;
   callDirectionIn: boolean;
@@ -131,6 +133,7 @@ export function emptyPrice(): PriceForm {
     amount: null,
     currency: '',
     period: '',
+    monthDay: null,
     alterationName: '',
     fixedPriceBucket: false,
     callDirectionIn: false,
@@ -157,6 +160,7 @@ export function emptyAlteration(): PriceAlterationForm {
     amount: null,
     currency: '',
     period: '',
+    monthDay: null,
   };
 }
 
@@ -253,7 +257,14 @@ function buildAlterationPayload(a: PriceAlterationForm): ProductOfferPriceAltera
     if (price) alteration.price = price;
   }
   if (isPeriodAllowed(a.type) && a.period) alteration.recurringChargePeriod = a.period;
+  if (a.type === 'recurring' && a.period === 'monthly' && isValidMonthDay(a.monthDay)) {
+    alteration.recurringChargeDayOfMonth = a.monthDay;
+  }
   return alteration;
+}
+
+function isValidMonthDay(value: number | null | undefined): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 31;
 }
 
 function buildPricePayload(
@@ -276,6 +287,9 @@ function buildPricePayload(
     if (priceObj) out.price = priceObj;
   }
   if (isPeriodAllowed(price.type) && price.period) out.recurringChargePeriod = price.period;
+  if (price.type === 'recurring' && price.period === 'monthly' && isValidMonthDay(price.monthDay)) {
+    out.recurringChargeDayOfMonth = price.monthDay;
+  }
 
   if (price.alterationName) {
     const alt = alterations.find((a) => a.name === price.alterationName);
@@ -451,6 +465,7 @@ function parseAlteration(a: ProductOfferPriceAlteration): PriceAlterationForm {
     amount: a.price?.taxIncludedAmount ?? null,
     currency: a.price?.currencyCode ?? '',
     period: a.recurringChargePeriod ?? '',
+    monthDay: a.recurringChargeDayOfMonth ?? null,
   };
 }
 
@@ -485,6 +500,7 @@ function parsePrice(p: ProductOfferingPrice): PriceForm {
     amount: p.price?.taxIncludedAmount ?? null,
     currency: p.price?.currencyCode ?? '',
     period: p.recurringChargePeriod ?? '',
+    monthDay: p.recurringChargeDayOfMonth ?? null,
     alterationName: p.productOfferPriceAlteration?.name ?? '',
     fixedPriceBucket: Boolean(charValue(p.prodSpecCharValueUse, 'fixedPriceBucket')),
     callDirectionIn: callDir === 'answer',

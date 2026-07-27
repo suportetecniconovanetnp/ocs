@@ -48,6 +48,7 @@ const unitItems = computed(() =>
   ALL_UNITS.map((u) => ({ ...u, props: { disabled: !allowedUnits.value.includes(u.value) } })),
 );
 const periodAllowed = computed(() => isPeriodAllowed(form.value.type));
+const fixedMonthDayAllowed = computed(() => periodAllowed.value && form.value.period === 'monthly');
 const amountAllowed = computed(() => isAmountAllowed(form.value.type));
 
 watch(
@@ -55,6 +56,14 @@ watch(
   () => {
     form.value.unit = defaultUnitFor(allowedUnits.value, form.value.unit);
     if (!periodAllowed.value) form.value.period = '';
+    if (!fixedMonthDayAllowed.value) form.value.monthDay = null;
+  },
+);
+
+watch(
+  () => form.value.period,
+  () => {
+    if (!fixedMonthDayAllowed.value) form.value.monthDay = null;
   },
 );
 
@@ -99,6 +108,17 @@ defineExpose({ show });
             persistent-hint
           />
         </div>
+        <v-text-field
+          v-if="fixedMonthDayAllowed"
+          v-model.number="form.monthDay"
+          type="number"
+          min="1"
+          max="31"
+          label="Renewal day of month"
+          hint="If the day does not exist in a month, billing runs on that month’s last day."
+          persistent-hint
+          class="mb-3"
+        />
         <div class="d-flex ga-3 mb-3">
           <v-select
             v-model="form.unit"

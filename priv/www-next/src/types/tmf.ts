@@ -93,6 +93,7 @@ export interface ProductOfferPriceAlteration {
   unitOfMeasure?: string;
   price?: PriceTaxIncluded;
   recurringChargePeriod?: string;
+  recurringChargeDayOfMonth?: number;
 }
 
 export interface ProductOfferingPrice {
@@ -101,6 +102,7 @@ export interface ProductOfferingPrice {
   description?: string;
   priceType?: 'recurring' | 'usage' | 'one time' | 'tariff';
   recurringChargePeriod?: string;
+  recurringChargeDayOfMonth?: number;
   unitOfMeasure?: string;
   price?: PriceTaxIncluded;
   validFor?: ValidFor;

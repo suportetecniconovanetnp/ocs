@@ -86,6 +86,12 @@ function show() {
   open.value = true;
 }
 
+function formatPeriod(period: string, monthDay: number | null): string {
+  if (!period) return '—';
+  if (period === 'monthly' && monthDay != null) return `${period} (day ${monthDay})`;
+  return period;
+}
+
 /* Prices */
 function addPrice() {
   priceDialog.value?.show(emptyPrice(), null);
@@ -329,7 +335,7 @@ defineExpose({ show });
                     <code v-if="p.amount != null">{{ p.amount }} {{ p.currency }}</code>
                     <span v-else>—</span>
                   </td>
-                  <td>{{ p.period || '—' }}</td>
+                  <td>{{ formatPeriod(p.period, p.monthDay) }}</td>
                   <td>
                     <span v-if="p.alterationName" class="text-caption">{{ p.alterationName }}</span>
                     <span v-else class="text-caption text-medium-emphasis">—</span>
@@ -390,7 +396,7 @@ defineExpose({ show });
                     <code v-if="a.amount != null">{{ a.amount }} {{ a.currency }}</code>
                     <span v-else>—</span>
                   </td>
-                  <td>{{ a.period || '—' }}</td>
+                  <td>{{ formatPeriod(a.period, a.monthDay) }}</td>
                   <td>
                     <span class="text-caption">
                       {{

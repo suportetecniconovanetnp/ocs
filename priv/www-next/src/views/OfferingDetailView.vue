@@ -21,6 +21,12 @@ function back() {
 function edit() {
   formDialog.value?.show();
 }
+
+function periodLabel(period?: string, monthDay?: number) {
+  if (!period) return '—';
+  if (period === 'monthly' && typeof monthDay === 'number') return `${period} (day ${monthDay})`;
+  return period;
+}
 </script>
 
 <template>
@@ -94,7 +100,7 @@ function edit() {
                 <td>
                   <v-chip size="x-small">{{ p.priceType ?? '—' }}</v-chip>
                 </td>
-                <td>{{ p.recurringChargePeriod ?? '—' }}</td>
+                <td>{{ periodLabel(p.recurringChargePeriod, p.recurringChargeDayOfMonth) }}</td>
                 <td>{{ p.unitOfMeasure ?? '—' }}</td>
                 <td class="text-end">
                   <code v-if="p.price?.taxIncludedAmount != null">

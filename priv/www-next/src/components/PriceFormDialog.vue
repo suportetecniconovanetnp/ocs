@@ -57,6 +57,7 @@ const unitItems = computed(() =>
   ALL_UNITS.map((u) => ({ ...u, props: { disabled: !allowedUnits.value.includes(u.value) } })),
 );
 const periodAllowed = computed(() => isPeriodAllowed(form.value.type));
+const fixedMonthDayAllowed = computed(() => periodAllowed.value && form.value.period === 'monthly');
 const plaAllowed = computed(() => isPlaAllowed(form.value.type));
 const amountAllowed = computed(() => isAmountAllowed(form.value.type));
 const reserveTimeAllowed = computed(() => isReserveTimeAllowed(form.value.unit));
@@ -70,11 +71,19 @@ watch(
   () => {
     form.value.unit = defaultUnitFor(allowedUnits.value, form.value.unit);
     if (!periodAllowed.value) form.value.period = '';
+    if (!fixedMonthDayAllowed.value) form.value.monthDay = null;
     if (!plaAllowed.value) form.value.pla = '';
     if (!amountAllowed.value) {
       form.value.amount = null;
       form.value.currency = '';
     }
+  },
+);
+
+watch(
+  () => form.value.period,
+  () => {
+    if (!fixedMonthDayAllowed.value) form.value.monthDay = null;
   },
 );
 
@@ -140,6 +149,17 @@ defineExpose({ show });
             persistent-hint
           />
         </div>
+        <v-text-field
+          v-if="fixedMonthDayAllowed"
+          v-model.number="form.monthDay"
+          type="number"
+          min="1"
+          max="31"
+          label="Renewal day of month"
+          hint="If the day does not exist in a month, billing runs on that month’s last day."
+          persistent-hint
+          class="mb-3"
+        />
         <v-text-field
           v-model="form.pla"
           label="Pricing logic algorithm (URL)"

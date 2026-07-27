@@ -1790,6 +1790,9 @@ price([type | T], #price{type = Type} = P, Acc)
 price([period | T], #price{period = Period} = P, Acc)
 	when Period /= undefined ->
 	price(T, P, [{"recurringChargePeriod", price_period(Period)} | Acc]);
+price([month_day | T], #price{period = monthly, month_day = MonthDay} = P, Acc)
+		when is_integer(MonthDay) ->
+	price(T, P, [{"recurringChargeDayOfMonth", MonthDay} | Acc]);
 price([units | T], #price{units = octets, size = Size} = P, Acc)
 		when is_integer(Size) ->
 	price(T, P, [{"unitOfMeasure", integer_to_list(Size) ++ "b"} | Acc]);
@@ -1890,6 +1893,9 @@ price([{"price", {struct, L}} | T], Acc) when is_list(L) ->
 	price(T, Acc2);
 price([{"recurringChargePeriod", Period} | T], Acc) when is_list(Period) ->
 	price(T, Acc#price{period = price_period(Period)});
+price([{"recurringChargeDayOfMonth", MonthDay} | T], Acc)
+		when is_integer(MonthDay) ->
+	price(T, Acc#price{month_day = MonthDay});
 price([{"prodSpecCharValueUse", {array, _} = CharValueUses} | T], Acc) ->
 	price(T, Acc#price{char_value_use = char_value_uses(CharValueUses)});
 price([{"productOfferPriceAlteration", {struct, L} = Alteration} | T], Acc)
@@ -1937,6 +1943,9 @@ alteration([type | T], #alteration{type = Type} = A, Acc)
 alteration([period | T], #alteration{period = Period} = A, Acc)
 		when Period /= undefined ->
 	alteration(T, A, [{"recurringChargePeriod", price_period(Period)} | Acc]);
+alteration([month_day | T], #alteration{period = monthly, month_day = MonthDay} = A, Acc)
+		when is_integer(MonthDay) ->
+	alteration(T, A, [{"recurringChargeDayOfMonth", MonthDay} | Acc]);
 alteration([units | T], #alteration{units = octets, size = Size} = A, Acc)
 		when is_integer(Size) ->
 	alteration(T, A, [{"unitOfMeasure", integer_to_list(Size) ++ "b"} | Acc]);
@@ -2033,6 +2042,9 @@ alteration([{"price", {struct, L}} | T], Acc) ->
 alteration([{"recurringChargePeriod", Period} | T], Acc)
 		when is_list(Period) ->
 	alteration(T, Acc#alteration{period = price_period(Period)});
+alteration([{"recurringChargeDayOfMonth", MonthDay} | T], Acc)
+		when is_integer(MonthDay) ->
+	alteration(T, Acc#alteration{month_day = MonthDay});
 alteration([], Acc) ->
 	Acc.
 

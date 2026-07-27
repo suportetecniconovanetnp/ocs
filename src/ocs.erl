@@ -45,7 +45,7 @@
 -export([statistics/1]).
 -export([start/4, start/5, stop/3, get_acct/1, get_auth/1]).
 %% export the ocs private API
--export([normalize/1, subscription/4, end_period/2]).
+-export([normalize/1, subscription/4, end_period/2, end_period/3]).
 -export([parse_bucket/1]).
 
 -export_type([eap_method/0, match/0]).
@@ -1571,10 +1571,14 @@ add_offer(#offer{price = Prices} = Offer) when length(Prices) > 0 ->
 					is_integer(Size), Size > 0, is_integer(Amount) ->
 				true;
 			(#alteration{name = Name, type = recurring, period = Period,
-					units = Units, size = Size, amount = Amount})
+					month_day = MonthDay, units = Units, size = Size, amount = Amount})
 					when length(Name) > 0, ((Period == hourly)
 					or (Period == daily) or (Period == weekly)
 					or (Period == monthly) or (Period == yearly)),
+					(((Period == monthly) andalso is_integer(MonthDay)
+					andalso (MonthDay > 0) andalso (MonthDay =< 31))
+					orelse ((Period == monthly) andalso (MonthDay == undefined))
+					orelse ((Period /= monthly) andalso (MonthDay == undefined))),
 					((Units == octets) or (Units == seconds) or (Units == messages)),
 					is_integer(Size), Size > 0, is_integer(Amount) ->
 				true;
@@ -1598,19 +1602,27 @@ add_offer(#offer{price = Prices} = Offer) when length(Prices) > 0 ->
 					when length(Name) > 0, is_integer(Amount) ->
 				Fvala(Alteration);
 			(#price{name = Name, type = recurring, period = Period,
-					units = undefined, size = undefined, amount = Amount,
+					month_day = MonthDay, units = undefined, size = undefined, amount = Amount,
 					alteration = undefined})
 					when length(Name) > 0, ((Period == hourly)
 					or (Period == daily) or (Period == weekly)
 					or (Period == monthly) or (Period == yearly)),
+					(((Period == monthly) andalso is_integer(MonthDay)
+					andalso (MonthDay > 0) andalso (MonthDay =< 31))
+					orelse ((Period == monthly) andalso (MonthDay == undefined))
+					orelse ((Period /= monthly) andalso (MonthDay == undefined))),
 					is_integer(Amount), Amount > 0 ->
 				true;
 			(#price{name = Name, type = recurring, period = Period,
-					units = undefined, size = undefined, amount = Amount,
+					month_day = MonthDay, units = undefined, size = undefined, amount = Amount,
 					alteration = #alteration{} = Alteration})
 					when length(Name) > 0, ((Period == hourly)
 					or (Period == daily) or (Period == weekly)
 					or (Period == monthly) or (Period == yearly)),
+					(((Period == monthly) andalso is_integer(MonthDay)
+					andalso (MonthDay > 0) andalso (MonthDay =< 31))
+					orelse ((Period == monthly) andalso (MonthDay == undefined))
+					orelse ((Period /= monthly) andalso (MonthDay == undefined))),
 					is_integer(Amount)  ->
 				Fvala(Alteration);
 			(#price{name = Name, type = usage, period = undefined,
@@ -3450,22 +3462,23 @@ subscription(Product, Now, false, Buckets,
 	subscription(Product, Now, false, Buckets, T);
 subscription(#product{id = ProdRef, payment = Payments} = Product,
 		Now, true, Buckets, [#price{type = recurring, period = Period,
-		amount = Amount, name = Name, alteration = undefined} | T]) when
+		month_day = MonthDay, amount = Amount, name = Name, alteration = undefined} | T]) when
 		Period /= undefined ->
 	NewBuckets = charge(ProdRef, Amount, Buckets),
-	NewPayments = [{Name, end_period(Now, Period)} | Payments],
+	NewPayments = [{Name, end_period(Now, Period, MonthDay)} | Payments],
 	Product1 = Product#product{payment = NewPayments},
 	subscription(Product1, Now, true, NewBuckets, T);
 subscription(#product{id = ProdRef, payment = Payments} = Product,
 		Now, false, Buckets, [#price{type = recurring, period = Period,
-		amount = Amount, name = Name, alteration = undefined} | T])
+		month_day = MonthDay, amount = Amount, name = Name, alteration = undefined} | T])
 		when Period /= undefined ->
 	{NewPayments, NewBuckets} = dues(Payments, Now,
-			Buckets, Name, Period, Amount, ProdRef),
+			Buckets, Name, Period, MonthDay, Amount, ProdRef),
 	Product1 = Product#product{payment = NewPayments},
 	subscription(Product1, Now, false, NewBuckets, T);
 subscription(#product{id = ProdRef, payment = Payments} = Product,
 		Now, true, Buckets, [#price{type = recurring, period = Period,
+			month_day = MonthDay,
 			amount = Amount, alteration = #alteration{units = Units,
 			size = Size, amount = AllowanceAmount}, name = Name,
 			char_value_use = CharValueUse} | T]) when
@@ -3478,33 +3491,35 @@ subscription(#product{id = ProdRef, payment = Payments} = Product,
 					attributes = #{bucket_type => normal},
 					units = Units, remain_amount = Size,
 					product = [ProdRef],
-					end_date = end_period(Now, Period),
+					end_date = end_period(Now, Period, MonthDay),
 					last_modified = {Now, N}} | Buckets]),
-	NewPayments = [{Name, end_period(Now, Period)} | Payments],
+	NewPayments = [{Name, end_period(Now, Period, MonthDay)} | Payments],
 	Product1 = Product#product{payment = NewPayments},
 	subscription(Product1, Now, true, NewBuckets, T);
 subscription(#product{id = ProdRef, payment = Payments} = Product,
 		Now, false, Buckets, [#price{type = recurring, period = Period,
+			month_day = MonthDay,
 			amount = Amount, alteration = #alteration{units = Units,
 			size = Size, amount = AllowanceAmount}, name = Name,
 			char_value_use = CharValueUse} | T])
 			when (Period /= undefined) and ((Units == octets)
 			orelse (Units == seconds) orelse (Units == messages)) ->
 	{NewPayments, NewBuckets1} = dues(Payments, Now,
-			Buckets, Name, Period, Amount, ProdRef),
+			Buckets, Name, Period, MonthDay, Amount, ProdRef),
 	N = erlang:unique_integer([positive]),
 	NewBuckets2 = charge(ProdRef, AllowanceAmount,
 			[#bucket{id = generate_bucket_id(),
 					price = bucket_price(Name, CharValueUse),
 					attributes = #{bucket_type => normal},
 					units = Units, remain_amount = Size, product = [ProdRef],
-					end_date = end_period(Now, Period), last_modified = {Now, N}}
+					end_date = end_period(Now, Period, MonthDay), last_modified = {Now, N}}
 			| NewBuckets1]),
 	Product1 = Product#product{payment = NewPayments},
 	subscription(Product1, Now, false, NewBuckets2, T);
 subscription(#product{id = ProdRef, payment = Payments} = Product, Now, true,
 		Buckets, [#price{type = Type,
 		alteration = #alteration{type = recurring, period = Period,
+		month_day = MonthDay,
 		units = Units, size = Size, amount = Amount}, name = Name,
 		char_value_use = CharValueUse} | T])
 		when Period /= undefined, Units == octets; Units == seconds;
@@ -3515,25 +3530,25 @@ subscription(#product{id = ProdRef, payment = Payments} = Product, Now, true,
 					price = bucket_price(Name, CharValueUse),
 					attributes = #{bucket_type => normal},
 					remain_amount = Size, product = [ProdRef],
-					end_date = end_period(Now, Period), last_modified = {Now, N}}
+					end_date = end_period(Now, Period, MonthDay), last_modified = {Now, N}}
 			| Buckets]),
-	NewPayments = [{Name, end_period(Now, Period)} | Payments],
+	NewPayments = [{Name, end_period(Now, Period, MonthDay)} | Payments],
 	Product1 = Product#product{payment = NewPayments},
 	subscription(Product1, Now, true, NewBuckets, T);
 subscription(#product{id = ProdRef, payment = Payments} = Product,
 		Now, false, Buckets, [#price{type = Type, name = Name,
 		char_value_use = CharValueUse,
-		alteration = #alteration{type = recurring, period = Period, units = Units,
-		size = Size, amount = Amount}} | T]) when Period /= undefined, Units == octets;
+		alteration = #alteration{type = recurring, period = Period, month_day = MonthDay,
+		units = Units, size = Size, amount = Amount}} | T]) when Period /= undefined, Units == octets;
 		Units == seconds; Units == messages, ((Type == usage) or (Type == tariff)) ->
-	{NewPayments, NewBuckets1} = dues(Payments, Now, Buckets, Name, Period, Amount, ProdRef),
+	{NewPayments, NewBuckets1} = dues(Payments, Now, Buckets, Name, Period, MonthDay, Amount, ProdRef),
 	N = erlang:unique_integer([positive]),
 	NewBuckets2 = charge(ProdRef, Amount,
 			[#bucket{id = generate_bucket_id(), units = Units,
 					price = bucket_price(Name, CharValueUse),
 					attributes = #{bucket_type => normal},
 					remain_amount = Size, product = [ProdRef],
-					end_date = end_period(Now, Period), last_modified = {Now, N}}
+					end_date = end_period(Now, Period, MonthDay), last_modified = {Now, N}}
 			| NewBuckets1]),
 	Product1 = Product#product{payment = NewPayments},
 	subscription(Product1, Now, false, NewBuckets2, T);
@@ -3554,24 +3569,24 @@ bucket_price(PriceName, []) ->
 	[].
 
 %% @hidden
-dues(Payments, Now, Buckets, PName, Period, Amount, ProdRef) ->
-	dues(Payments, Now, Buckets, PName, Period, Amount, ProdRef, []).
+dues(Payments, Now, Buckets, PName, Period, MonthDay, Amount, ProdRef) ->
+	dues(Payments, Now, Buckets, PName, Period, MonthDay, Amount, ProdRef, []).
 %% @hidden
-dues([{_, DueDate} = P | T], Now, Buckets, PName, Period, Amount, ProdRef, Acc) when DueDate > Now ->
-	dues(T, Now, Buckets, PName, Period, Amount, ProdRef, [P | Acc]);
-dues([{PName, DueDate} | T], Now, Buckets, PName, Period, Amount, ProdRef, Acc) ->
+dues([{_, DueDate} = P | T], Now, Buckets, PName, Period, MonthDay, Amount, ProdRef, Acc) when DueDate > Now ->
+	dues(T, Now, Buckets, PName, Period, MonthDay, Amount, ProdRef, [P | Acc]);
+dues([{PName, DueDate} | T], Now, Buckets, PName, Period, MonthDay, Amount, ProdRef, Acc) ->
 	NewBuckets = charge(ProdRef, Amount, Buckets),
-	case end_period(DueDate, Period) of
+	case end_period(DueDate, Period, MonthDay) of
 		NextDueDate when NextDueDate < Now ->
 			dues([{PName, NextDueDate} | T], Now,
-					NewBuckets, PName, Period, Amount, ProdRef, Acc);
+					NewBuckets, PName, Period, MonthDay, Amount, ProdRef, Acc);
 		NextDueDate ->
 			dues(T, Now, NewBuckets, PName, Period,
-					Amount, ProdRef, [{PName, NextDueDate} | Acc])
+					MonthDay, Amount, ProdRef, [{PName, NextDueDate} | Acc])
 	end;
-dues([P | T], Now, Buckets, PName, Period, Amount, ProdRef, Acc) ->
-	dues(T, Now, Buckets, PName, Period, Amount, ProdRef, [P | Acc]);
-dues([], _Now, Buckets, _PName, _Period, _Amount, _ProdRef, Acc) ->
+dues([P | T], Now, Buckets, PName, Period, MonthDay, Amount, ProdRef, Acc) ->
+	dues(T, Now, Buckets, PName, Period, MonthDay, Amount, ProdRef, [P | Acc]);
+dues([], _Now, Buckets, _PName, _Period, _MonthDay, _Amount, _ProdRef, Acc) ->
 	{lists:reverse(Acc), Buckets}.
 
 -spec get_params() -> Result
@@ -3723,6 +3738,20 @@ date(MilliSeconds) when is_integer(MilliSeconds) ->
 %% @private
 end_period(StartTime, Period) when is_integer(StartTime) ->
 	end_period1(date(StartTime), Period).
+
+-spec end_period(StartTime, Period, MonthDay) -> EndTime
+	when
+		StartTime :: non_neg_integer(),
+		Period :: hourly | daily | weekly | monthly | yearly,
+		MonthDay :: 1..31 | undefined,
+		EndTime :: non_neg_integer().
+%% @doc Calculate end of period with optional fixed monthly renewal day.
+%% @private
+end_period(StartTime, monthly, MonthDay)
+		when is_integer(StartTime), is_integer(MonthDay), MonthDay > 0, MonthDay =< 31 ->
+	end_month_day(date(StartTime), MonthDay);
+end_period(StartTime, Period, _MonthDay) when is_integer(StartTime) ->
+	end_period(StartTime, Period).
 %% @hidden
 end_period1({Date, {23, Minute, Second}}, hourly) ->
 	NextDay = calendar:date_to_gregorian_days(Date) + 1,
@@ -3782,6 +3811,26 @@ end_period1({{Year, Month, Day}, Time}, monthly) ->
 	gregorian_datetime_to_system_time({EndDate, Time}) - 1;
 end_period1({{Year, Month, Day}, Time}, yearly) ->
 	EndDate = {Year + 1, Month, Day},
+	gregorian_datetime_to_system_time({EndDate, Time}) - 1.
+
+%% @hidden
+end_month_day({{Year, Month, Day}, Time}, TargetDay) ->
+	LastDay = calendar:last_day_of_the_month(Year, Month),
+	CandidateDay = erlang:min(TargetDay, LastDay),
+	{EndYear, EndMonth, EndDay} = case Day < CandidateDay of
+		true ->
+			{Year, Month, CandidateDay};
+		false ->
+			{NextYear, NextMonth} = case Month of
+				12 ->
+					{Year + 1, 1};
+				_ ->
+					{Year, Month + 1}
+			end,
+			NextLastDay = calendar:last_day_of_the_month(NextYear, NextMonth),
+			{NextYear, NextMonth, erlang:min(TargetDay, NextLastDay)}
+	end,
+	EndDate = {EndYear, EndMonth, EndDay},
 	gregorian_datetime_to_system_time({EndDate, Time}) - 1.
 
 -spec default_chars(CharValueUse, ReqChars) -> NewChars
@@ -3940,4 +3989,3 @@ reservation_key(4) ->
 	service_id;
 reservation_key(5) ->
 	charging_key.
-

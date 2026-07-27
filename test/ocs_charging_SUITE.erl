@@ -84,11 +84,13 @@ all() ->
 	[add_once, add_once_bundle, add_once_allowance,
 			add_once_allowance_bundle, add_recurring,
 			add_recurring_bundle, add_recurring_allowance,
+			add_recurring_allowance_fixed_day,
 			add_recurring_usage_allowance, add_once_usage_allowance,
 			add_once_tariff_allowance, add_recurring_tariff_allowance,
 			add_usage_once_allowance, add_usage_recurring_allowance,
 			add_once_recurring_allowance,
 			add_recurring_allowance_bundle,
+			end_period_monthly_fixed_day,
 			recurring_charge_monthly, recurring_charge_hourly,
 			recurring_charge_yearly, recurring_charge_daily].
 
@@ -300,6 +302,29 @@ add_recurring_allowance(_Config) ->
 	{_, #bucket{remain_amount = -1000}, Buckets1} = lists:keytake(cents,
 			#bucket.units, Buckets),
 	EndDate = ocs:end_period(SD, monthly),
+	{_, #bucket{remain_amount = UnitSize, end_date = EndDate}, []}
+			= lists:keytake(octets, #bucket.units, Buckets1).
+
+add_recurring_allowance_fixed_day() ->
+	[{userdata, [{doc, "Recurring allowances can use a fixed monthly renewal day"}]}].
+
+add_recurring_allowance_fixed_day(_Config) ->
+	SD = erlang:system_time(millisecond),
+	OfferId = ocs:generate_password(),
+	UnitSize = 100000000000,
+	MonthDay = 30,
+	Alteration = (alteration(SD, recurring, monthly, octets, UnitSize, 0))#alteration{
+			month_day = MonthDay},
+	Amount = 1000,
+	Price = (recurring(SD, monthly, Amount, Alteration))#price{month_day = MonthDay},
+	Offer = #offer{name = OfferId, status = active,
+			specification = 8, price = [Price]},
+	{ok, _} = ocs:add_offer(Offer),
+	{ok, #product{balance = BRefs}} = ocs:add_product(OfferId, []),
+	Buckets = lists:flatten([mnesia:dirty_read(bucket, BRef) || BRef <- BRefs]),
+	{_, #bucket{remain_amount = -1000}, Buckets1} = lists:keytake(cents,
+			#bucket.units, Buckets),
+	EndDate = ocs:end_period(SD, monthly, MonthDay),
 	{_, #bucket{remain_amount = UnitSize, end_date = EndDate}, []}
 			= lists:keytake(octets, #bucket.units, Buckets1).
 
@@ -667,6 +692,24 @@ recurring_charge_daily(_Config) ->
 	F2 = fun({_, DueDate}) -> DueDate == ocs:end_period(Expired, daily) end,
 	true = lists:any(F2, Payments).
 
+end_period_monthly_fixed_day() ->
+	[{userdata, [{doc, "Fixed monthly renewal day clamps to the month's last day when needed"}]}].
+
+end_period_monthly_fixed_day(_Config) ->
+	JanMid2025 = system_time({{2025, 1, 15}, {12, 0, 0}}),
+	ExpectedJan2025 = system_time({{2025, 1, 30}, {12, 0, 0}}) - 1,
+	Jan2025 = system_time({{2025, 1, 30}, {12, 0, 0}}),
+	ExpectedFeb2025 = system_time({{2025, 2, 28}, {12, 0, 0}}) - 1,
+	Feb2028Start = system_time({{2028, 1, 30}, {12, 0, 0}}),
+	ExpectedFeb2028 = system_time({{2028, 2, 29}, {12, 0, 0}}) - 1,
+	Mar2025 = system_time({{2025, 3, 30}, {12, 0, 0}}),
+	ExpectedApr2025 = system_time({{2025, 4, 30}, {12, 0, 0}}) - 1,
+	ExpectedJan2025 = ocs:end_period(JanMid2025, monthly, 30),
+	ExpectedFeb2025 = ocs:end_period(Jan2025, monthly, 30),
+	ExpectedFeb2028 = ocs:end_period(Feb2028Start, monthly, 30),
+	ExpectedApr2025 = ocs:end_period(Mar2025, monthly, 30),
+	ok.
+
 %%---------------------------------------------------------------------
 %%  Internal functions
 %%---------------------------------------------------------------------
@@ -697,3 +740,6 @@ alteration(SD, Type, Period, Units, Size, Amount) ->
 			start_date = SD, type = Type, period = Period,
 			units = Units, size = Size, amount = Amount}.
 
+system_time(DateTime) ->
+	Seconds = calendar:datetime_to_gregorian_seconds(DateTime) - 62167219200,
+	erlang:convert_time_unit(Seconds, second, millisecond).

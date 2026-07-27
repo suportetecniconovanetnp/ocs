@@ -917,6 +917,8 @@ get_offer(Config) ->
 				true
 		end,
 		true = (lists:keyfind("recurringChargePeriod", 1, L1) == lists:keyfind("recurringChargePeriod", 1, L2)),
+		true = (lists:keyfind("recurringChargeDayOfMonth", 1, L1)
+				== lists:keyfind("recurringChargeDayOfMonth", 1, L2)),
 		case {lists:keyfind("productOfferPriceAlteration", 1, L1), lists:keyfind("productOfferPriceAlteration", 1, L2)} of
 			{{_, {struct, A1}}, {_, {struct, A2}}} ->
 				true = (lists:keyfind("name", 1, A1) == lists:keyfind("name", 1, A2)),
@@ -947,7 +949,9 @@ get_offer(Config) ->
 					{false, false} ->
 						true
 				end,
-				true = (lists:keyfind("recurringChargePeriod", 1, A1) == lists:keyfind("recurringChargePeriod", 1, A2));
+				true = (lists:keyfind("recurringChargePeriod", 1, A1) == lists:keyfind("recurringChargePeriod", 1, A2)),
+				true = (lists:keyfind("recurringChargeDayOfMonth", 1, A1)
+						== lists:keyfind("recurringChargeDayOfMonth", 1, A2));
 			{false, false} ->
 				true
 		end
@@ -7278,6 +7282,7 @@ product_offer() ->
 	POPPriceCurrency1 = {"currencyCode", "USD"},
 	POPPrice1 = {"price", {struct, [POPPriceTaxInclude1, POPPriceCurrency1]}},
 	POPRecChargPeriod1 = {"recurringChargePeriod", "monthly"},
+	POPRecChargeDay1 = {"recurringChargeDayOfMonth", 30},
 	ProdAlterName = {"name", "allowance"},
 	ProdAlterDescription = {"description", ocs:generate_password()},
 	ProdAlterValidFor = {"validFor", {struct, [POPStartDateTime1]}},
@@ -7289,7 +7294,7 @@ product_offer() ->
 	POPAlteration = {"productOfferPriceAlteration", {struct, [ProdAlterName, ProdAlterDescription,
 		ProdAlterValidFor, ProdAlterPriceType, ProdAlterUOMeasure, ProdAlterPrice]}},
 	ProdOfferPrice1 = {struct, [POPName1, POPDescription1, POPValidFor1,
-			POPPriceType1, POPPrice1, POPRecChargPeriod1, POPAlteration]},
+			POPPriceType1, POPPrice1, POPRecChargPeriod1, POPRecChargeDay1, POPAlteration]},
 	POPName2 = {"name", "usage"},
 	POPDescription2 = {"description", ocs:generate_password()},
 	POPStratDateTime2 = {"startDateTime", ocs_rest:iso8601(erlang:system_time(millisecond))},
@@ -7991,4 +7996,3 @@ fill_acct(N, Protocol) ->
 	end,
 	ok = ocs_log:acct_log(Protocol1, Server, Type, Request, Response, undefined),
 	fill_acct(N - 1, Protocol).
-

@@ -66,6 +66,7 @@
 		end_date :: pos_integer() | undefined,
 		type :: product_price_type() | undefined,
 		period :: recur_period() | undefined,
+		month_day :: 1..31 | undefined,
 		units :: cents | octets | seconds | messages | undefined,
 		size :: integer() | undefined,
 		amount :: integer() | undefined,
@@ -101,6 +102,7 @@
 		end_date :: pos_integer() | undefined,
 		type :: product_price_type() | undefined,
 		period :: recur_period() | undefined,
+		month_day :: 1..31 | undefined,
 		units :: cents | octets | seconds | messages | undefined,
 		size :: integer() | undefined,
 		amount :: integer() | undefined,
@@ -288,4 +290,3 @@
 		node_functionality :: string() | undefined,
 		subscription_id :: string() | undefined,
 		last_modified :: pos_integer() | undefined}).
-
