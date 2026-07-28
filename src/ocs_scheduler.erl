@@ -76,17 +76,34 @@ product_charge() ->
 		ok;
 	product_charge1(ProdRef, Now) ->
 		F = fun() ->
+				error_logger:info_report(["Scheduler product iteration start",
+						{module, ?MODULE}, {product_id, ProdRef}, {time, Now}]),
 				case mnesia:read(product, ProdRef, write) of
 				[#product{product = OfferId,
 						payment = Payments,
 						balance = BucketRefs} = Product] ->
+					error_logger:info_report(["Scheduler product loaded",
+							{module, ?MODULE}, {product_id, ProdRef},
+							{offer_id, OfferId}, {payments, Payments},
+							{bucket_ref_count, length(BucketRefs)}, {time, Now}]),
 					case mnesia:read(offer, OfferId, read) of
 						[#offer{name = OfferId, price = Prices,
 								bundle = Bundle} = Offer] when is_list(Bundle) ->
 							Offer1 = ocs:normalize_offer(Offer),
 							Prices = Offer1#offer.price,
 							Bundle = Offer1#offer.bundle,
+							error_logger:info_report(["Scheduler offer loaded",
+									{module, ?MODULE}, {product_id, ProdRef},
+									{offer_id, OfferId},
+									{price_count, length(Prices)},
+									{bundle_count, length(Bundle)},
+									{time, Now}]),
 							Fbundle = fun(#bundled_po{name = OfferName}) ->
+										error_logger:info_report(["Scheduler bundled offer read",
+												{module, ?MODULE}, {product_id, ProdRef},
+												{offer_id, OfferId},
+												{bundled_offer_id, OfferName},
+												{time, Now}]),
 										case mnesia:read(offer, OfferName, read) of
 											[#offer{bundle = []} = BundledOffer] ->
 												(ocs:normalize_offer(BundledOffer))#offer.price;
@@ -95,6 +112,11 @@ product_charge() ->
 										end
 								end,
 								BundledOfferPrices = lists:map(Fbundle, Bundle),
+								error_logger:info_report(["Scheduler bundled prices loaded",
+										{module, ?MODULE}, {product_id, ProdRef},
+										{offer_id, OfferId},
+										{bundled_price_group_count, length(BundledOfferPrices)},
+										{time, Now}]),
 								case if_recur(Prices ++ BundledOfferPrices) of
 									true ->
 										error_logger:info_report(["Scheduler recurring offer found",
@@ -127,13 +149,18 @@ product_charge() ->
 												{offer_id, OfferId}, {time, Now}]),
 										ok
 								end;
-							[] ->
-								throw(offer_not_found)
+						[] ->
+							error_logger:info_report(["Scheduler offer missing",
+									{module, ?MODULE}, {product_id, ProdRef},
+									{offer_id, OfferId}, {time, Now}]),
+							throw(offer_not_found)
 					end;
 				[] ->
+					error_logger:info_report(["Scheduler product missing",
+							{module, ?MODULE}, {product_id, ProdRef}, {time, Now}]),
 					throw(product_ref_not_found)
-			end
-	end,
+				end
+		end,
 	case mnesia:transaction(F) of
 		{atomic, ok} ->
 			product_charge1(get_product(ProdRef), Now);
