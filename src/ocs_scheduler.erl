@@ -86,12 +86,11 @@ product_charge() ->
 							{module, ?MODULE}, {product_id, ProdRef},
 							{offer_id, OfferId}, {payments, Payments},
 							{bucket_ref_count, length(BucketRefs)}, {time, Now}]),
-					case mnesia:read(offer, OfferId, read) of
-						[#offer{name = OfferId, price = Prices,
-								bundle = Bundle} = Offer] when is_list(Bundle) ->
-							Offer1 = ocs:normalize_offer(Offer),
-							Prices = Offer1#offer.price,
-							Bundle = Offer1#offer.bundle,
+						case mnesia:read(offer, OfferId, read) of
+							[#offer{name = OfferId} = Offer] ->
+								Offer1 = ocs:normalize_offer(Offer),
+								Prices = Offer1#offer.price,
+								Bundle = Offer1#offer.bundle,
 							error_logger:info_report(["Scheduler offer loaded",
 									{module, ?MODULE}, {product_id, ProdRef},
 									{offer_id, OfferId},
