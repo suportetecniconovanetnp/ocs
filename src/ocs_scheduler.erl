@@ -65,7 +65,12 @@ start(ScheduledTime, Interval) ->
 %% @doc Apply recurring charges to all subscriptions.
 product_charge() ->
 	Now = erlang:system_time(millisecond),
-	product_charge1(get_product(start), Now).
+	ProductCount = mnesia:table_info(product, size),
+	FirstProduct = get_product(start),
+	error_logger:info_report(["Scheduler product scan start",
+			{module, ?MODULE}, {product_count, ProductCount},
+			{first_product, FirstProduct}, {time, Now}]),
+	product_charge1(FirstProduct, Now).
 %% @hidden
 	product_charge1('$end_of_table', _Now) ->
 		ok;
