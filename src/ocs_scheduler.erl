@@ -78,10 +78,13 @@ product_charge1(ProdRef, Now) ->
 					case mnesia:read(offer, OfferId, read) of
 						[#offer{name = OfferId, price = Prices,
 								bundle = Bundle} = Offer] when is_list(Bundle) ->
+							Offer1 = ocs:normalize_offer(Offer),
+							Prices = Offer1#offer.price,
+							Bundle = Offer1#offer.bundle,
 							Fbundle = fun(#bundled_po{name = OfferName}) ->
 										case mnesia:read(offer, OfferName, read) of
-											[#offer{price = Prices, bundle = []}] ->
-												Prices;
+											[#offer{bundle = []} = BundledOffer] ->
+												(ocs:normalize_offer(BundledOffer))#offer.price;
 											[] ->
 												throw(offer_not_found)
 										end
@@ -93,7 +96,7 @@ product_charge1(ProdRef, Now) ->
 										true ->
 											Buckets1 = [mnesia:read(bucket, B) || B <- BucketRefs],
 											Buckets2 = lists:flatten(Buckets1),
-											{NewProduct1, Buckets3} = ocs:subscription(Product, Offer,
+											{NewProduct1, Buckets3} = ocs:subscription(Product, Offer1,
 													Buckets2, false),
 											BucketAdjustments = bucket_adjustment(ProdRef,
 													BucketRefs, Buckets2, Buckets3),
