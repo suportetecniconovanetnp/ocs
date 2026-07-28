@@ -96,6 +96,7 @@ env_default OCS_MAX_RESERVE_OCTETS '10000000'
 env_default OCS_MAX_RESERVE_SECONDS 'undefined'
 env_default OCS_MAX_RESERVE_MESSAGES 'undefined'
 env_default OCS_SESSION_DEBUG_LOGS 'false'
+env_default OCS_SCHEDULER_DEBUG_LOGS 'false'
 
 log() {
   printf '[ocs-entrypoint] %s\n' "$*"
@@ -200,6 +201,7 @@ render_sys_config() {
       {max_reserve_messages, ${OCS_MAX_RESERVE_MESSAGES}},
 
       {session_debug_logs, ${OCS_SESSION_DEBUG_LOGS}},
+      {scheduler_debug_logs, ${OCS_SCHEDULER_DEBUG_LOGS}},
 
       {acct_log_rotate, ${OCS_ACCT_LOG_ROTATE_MIN}},
       {acct_log_rotate_time, ${OCS_ACCT_LOG_ROTATE_TIME}},

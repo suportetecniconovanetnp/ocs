@@ -47,7 +47,7 @@ defaults):
 | Retenção de log | `OCS_{ACCT,AUTH,ABMF}_LOG_SIZE_BYTES`, `OCS_{ACCT,AUTH,ABMF}_LOG_FILE_COUNT` |
 | TLS | `OCS_TLS_KEY`, `OCS_TLS_CERT`, `OCS_TLS_CACERT` |
 | Mnesia / SNMP | `OCS_MNESIA_DIR`, `OCS_SNMP_CONF_DIR`, `OCS_SNMP_DB_DIR` |
-| Charging | `OCS_MIN_RESERVE_*`, `OCS_CHARGING_SCHEDULER_TIME`, `OCS_CHARGING_INTERVAL`, `OCS_FORCE_MONTHLY_RENEWAL_*`, `OCS_EXPLICIT_RESERVE_*`, `OCS_MAX_RESERVE_*`, `OCS_SESSION_DEBUG_LOGS` |
+| Charging | `OCS_MIN_RESERVE_*`, `OCS_CHARGING_SCHEDULER_TIME`, `OCS_CHARGING_INTERVAL`, `OCS_FORCE_MONTHLY_RENEWAL_*`, `OCS_EXPLICIT_RESERVE_*`, `OCS_MAX_RESERVE_*`, `OCS_SESSION_DEBUG_LOGS`, `OCS_SCHEDULER_DEBUG_LOGS` |
 | Bootstrap | `OCS_INIT_DB`, `OCS_NODENAME`, `OCS_DEBUG` |
 | Compose | `OCS_IMAGE`, `OCS_HOSTNAME`, `OCS_BIND_HOST`, `OCS_DATA_DIR`, `OCS_*_PORT_HOST` |
 
@@ -121,6 +121,7 @@ services:
       OCS_MAX_RESERVE_SECONDS: "undefined"
       OCS_MAX_RESERVE_MESSAGES: "undefined"
       OCS_SESSION_DEBUG_LOGS: "true"
+      OCS_SCHEDULER_DEBUG_LOGS: "false"
 
       # Rotação de log
       OCS_ACCT_LOG_ROTATE_MIN: "1440"
@@ -250,6 +251,17 @@ Setar `OCS_SESSION_DEBUG_LOGS=true` no `.env` faz o renderer incluir
 - `DIAMETER Ro debit normalization`
 - `OCS session trace`
 - `OCS stale session cleanup`
+
+## Logs detalhados do scheduler
+
+Setar `OCS_SCHEDULER_DEBUG_LOGS=true` no `.env` faz o renderer incluir
+`{scheduler_debug_logs, true}` no `sys.config`. A partir daí aparecem em
+`docker logs ocs` eventos de diagnóstico da renovação recorrente, como:
+
+- `Scheduler product scan start`
+- `Scheduler recurring payment evaluation`
+- `Scheduler applying recurring charge`
+- `Scheduler skipping recurring charge`
 
 Erros reais do sistema (ex. `DIAMETER AVP unsupported`) sempre aparecem,
 independente da flag.

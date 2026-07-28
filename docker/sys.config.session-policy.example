@@ -29,6 +29,8 @@
 
       %% Enable only while investigating session charging behavior.
       {session_debug_logs, false},
+      %% Enable only while investigating scheduler renewal behavior.
+      {scheduler_debug_logs, false},
 
       {acct_log_rotate, 1440},
       {acct_log_rotate_time, {4,4,4}},

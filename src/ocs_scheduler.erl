@@ -67,7 +67,7 @@ product_charge() ->
 	Now = erlang:system_time(millisecond),
 	ProductCount = mnesia:table_info(product, size),
 	FirstProduct = get_product(start),
-	error_logger:info_report(["Scheduler product scan start",
+	debug_log(["Scheduler product scan start",
 			{module, ?MODULE}, {product_count, ProductCount},
 			{first_product, FirstProduct}, {time, Now}]),
 	product_charge1(FirstProduct, Now).
@@ -76,13 +76,13 @@ product_charge() ->
 		ok;
 	product_charge1(ProdRef, Now) ->
 		F = fun() ->
-				error_logger:info_report(["Scheduler product iteration start",
+				debug_log(["Scheduler product iteration start",
 						{module, ?MODULE}, {product_id, ProdRef}, {time, Now}]),
 				case mnesia:read(product, ProdRef, write) of
 				[#product{product = OfferId,
 						payment = Payments,
 						balance = BucketRefs} = Product] ->
-					error_logger:info_report(["Scheduler product loaded",
+					debug_log(["Scheduler product loaded",
 							{module, ?MODULE}, {product_id, ProdRef},
 							{offer_id, OfferId}, {payments, Payments},
 							{bucket_ref_count, length(BucketRefs)}, {time, Now}]),
@@ -91,14 +91,14 @@ product_charge() ->
 								Offer1 = ocs:normalize_offer(Offer),
 								Prices = Offer1#offer.price,
 								Bundle = Offer1#offer.bundle,
-							error_logger:info_report(["Scheduler offer loaded",
+							debug_log(["Scheduler offer loaded",
 									{module, ?MODULE}, {product_id, ProdRef},
 									{offer_id, OfferId},
 									{price_count, length(Prices)},
 									{bundle_count, length(Bundle)},
 									{time, Now}]),
 							Fbundle = fun(#bundled_po{name = OfferName}) ->
-										error_logger:info_report(["Scheduler bundled offer read",
+										debug_log(["Scheduler bundled offer read",
 												{module, ?MODULE}, {product_id, ProdRef},
 												{offer_id, OfferId},
 												{bundled_offer_id, OfferName},
@@ -111,20 +111,20 @@ product_charge() ->
 										end
 								end,
 								BundledOfferPrices = lists:map(Fbundle, Bundle),
-								error_logger:info_report(["Scheduler bundled prices loaded",
+								debug_log(["Scheduler bundled prices loaded",
 										{module, ?MODULE}, {product_id, ProdRef},
 										{offer_id, OfferId},
 										{bundled_price_group_count, length(BundledOfferPrices)},
 										{time, Now}]),
 								case if_recur(Prices ++ BundledOfferPrices) of
 									true ->
-										error_logger:info_report(["Scheduler recurring offer found",
+										debug_log(["Scheduler recurring offer found",
 												{module, ?MODULE}, {product_id, ProdRef},
 												{offer_id, OfferId}, {payments, Payments},
 												{time, Now}]),
 										case if_dues(ProdRef, Payments, Prices ++ BundledOfferPrices, Now) of
 											true ->
-												error_logger:info_report(["Scheduler applying recurring charge",
+												debug_log(["Scheduler applying recurring charge",
 														{module, ?MODULE}, {product_id, ProdRef},
 														{offer_id, OfferId}, {time, Now}]),
 												Buckets1 = [mnesia:read(bucket, B) || B <- BucketRefs],
@@ -137,25 +137,25 @@ product_charge() ->
 												NewProduct2 = NewProduct1#product{balance = NewBRefs},
 												{mnesia:write(NewProduct2), BucketAdjustments};
 											false ->
-												error_logger:info_report(["Scheduler skipping recurring charge",
+												debug_log(["Scheduler skipping recurring charge",
 														{module, ?MODULE}, {product_id, ProdRef},
 														{offer_id, OfferId}, {time, Now}]),
 												ok
 										end;
 									false ->
-										error_logger:info_report(["Scheduler found no recurring prices",
+										debug_log(["Scheduler found no recurring prices",
 												{module, ?MODULE}, {product_id, ProdRef},
 												{offer_id, OfferId}, {time, Now}]),
 										ok
 								end;
 						[] ->
-							error_logger:info_report(["Scheduler offer missing",
+							debug_log(["Scheduler offer missing",
 									{module, ?MODULE}, {product_id, ProdRef},
 									{offer_id, OfferId}, {time, Now}]),
 							throw(offer_not_found)
 					end;
 				[] ->
-					error_logger:info_report(["Scheduler product missing",
+					debug_log(["Scheduler product missing",
 							{module, ?MODULE}, {product_id, ProdRef}, {time, Now}]),
 					throw(product_ref_not_found)
 				end
@@ -232,11 +232,11 @@ bucket_adjustment(ProductRef, OldBucketRefs, OldBuckets, NewBuckets) ->
 	DelBucketAdj ++ UpdatedBucketAdj.
 
 %% @private
-	if_dues(ProdRef, [{Name, DueDate} | T], Prices, Now) ->
+if_dues(ProdRef, [{Name, DueDate} | T], Prices, Now) ->
 	case price_schedule(Name, Prices) of
 		{Period, MonthDay} ->
 			EffectiveDueDate = ocs:payment_due_date(DueDate, Period, MonthDay),
-			error_logger:info_report(["Scheduler recurring payment evaluation",
+			debug_log(["Scheduler recurring payment evaluation",
 					{module, ?MODULE}, {product_id, ProdRef}, {price_name, Name},
 					{period, Period}, {month_day, MonthDay},
 					{due_date, DueDate}, {effective_due_date, EffectiveDueDate},
@@ -248,12 +248,12 @@ bucket_adjustment(ProductRef, OldBucketRefs, OldBuckets, NewBuckets) ->
 					if_dues(ProdRef, T, Prices, Now)
 			end;
 		undefined when DueDate < Now ->
-			error_logger:info_report(["Scheduler recurring payment fallback due",
+			debug_log(["Scheduler recurring payment fallback due",
 					{module, ?MODULE}, {product_id, ProdRef}, {price_name, Name},
 					{due_date, DueDate}, {now, Now}, {decision, due_no_schedule}]),
 			true;
 		undefined ->
-			error_logger:info_report(["Scheduler recurring payment missing schedule",
+			debug_log(["Scheduler recurring payment missing schedule",
 					{module, ?MODULE}, {product_id, ProdRef}, {price_name, Name},
 					{due_date, DueDate}, {now, Now}, {decision, not_due_no_schedule}]),
 			if_dues(ProdRef, T, Prices, Now)
@@ -322,6 +322,15 @@ delete_b([BRef | T]) ->
 	delete_b(T);
 delete_b([]) ->
 	ok.
+
+%% @private
+debug_log(Report) ->
+	case application:get_env(ocs, scheduler_debug_logs, false) of
+		true ->
+			error_logger:info_report(Report);
+		false ->
+			ok
+	end.
 
 %% @hidden
 start_delay(ScheduledTime, Interval) when Interval < 1440 ->
