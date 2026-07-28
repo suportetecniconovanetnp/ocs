@@ -67,11 +67,11 @@ product_charge() ->
 	Now = erlang:system_time(millisecond),
 	product_charge1(get_product(start), Now).
 %% @hidden
-product_charge1('$end_of_table', _Now) ->
-	ok;
-product_charge1(ProdRef, Now) ->
-	F = fun() ->
-			case mnesia:read(product, ProdRef, write) of
+	product_charge1('$end_of_table', _Now) ->
+		ok;
+	product_charge1(ProdRef, Now) ->
+		F = fun() ->
+				case mnesia:read(product, ProdRef, write) of
 				[#product{product = OfferId,
 						payment = Payments,
 						balance = BucketRefs} = Product] ->
@@ -88,29 +88,42 @@ product_charge1(ProdRef, Now) ->
 											[] ->
 												throw(offer_not_found)
 										end
-							end,
-							BundledOfferPrices = lists:map(Fbundle, Bundle),
-							case if_recur(Prices ++ BundledOfferPrices) of
-								true ->
-									case if_dues(Payments, Prices ++ BundledOfferPrices, Now) of
-										true ->
-											Buckets1 = [mnesia:read(bucket, B) || B <- BucketRefs],
-											Buckets2 = lists:flatten(Buckets1),
-											{NewProduct1, Buckets3} = ocs:subscription(Product, Offer1,
-													Buckets2, false),
+								end,
+								BundledOfferPrices = lists:map(Fbundle, Bundle),
+								case if_recur(Prices ++ BundledOfferPrices) of
+									true ->
+										error_logger:info_report(["Scheduler recurring offer found",
+												{module, ?MODULE}, {product_id, ProdRef},
+												{offer_id, OfferId}, {payments, Payments},
+												{time, Now}]),
+										case if_dues(ProdRef, Payments, Prices ++ BundledOfferPrices, Now) of
+											true ->
+												error_logger:info_report(["Scheduler applying recurring charge",
+														{module, ?MODULE}, {product_id, ProdRef},
+														{offer_id, OfferId}, {time, Now}]),
+												Buckets1 = [mnesia:read(bucket, B) || B <- BucketRefs],
+												Buckets2 = lists:flatten(Buckets1),
+												{NewProduct1, Buckets3} = ocs:subscription(Product, Offer1,
+														Buckets2, false),
 											BucketAdjustments = bucket_adjustment(ProdRef,
 													BucketRefs, Buckets2, Buckets3),
 											NewBRefs = update_buckets(BucketRefs, Buckets1, Buckets3),
-											NewProduct2 = NewProduct1#product{balance = NewBRefs},
-											{mnesia:write(NewProduct2), BucketAdjustments};
-										false ->
-											ok
-									end;
-								false ->
-									ok
-							end;
-						[] ->
-							throw(offer_not_found)
+												NewProduct2 = NewProduct1#product{balance = NewBRefs},
+												{mnesia:write(NewProduct2), BucketAdjustments};
+											false ->
+												error_logger:info_report(["Scheduler skipping recurring charge",
+														{module, ?MODULE}, {product_id, ProdRef},
+														{offer_id, OfferId}, {time, Now}]),
+												ok
+										end;
+									false ->
+										error_logger:info_report(["Scheduler found no recurring prices",
+												{module, ?MODULE}, {product_id, ProdRef},
+												{offer_id, OfferId}, {time, Now}]),
+										ok
+								end;
+							[] ->
+								throw(offer_not_found)
 					end;
 				[] ->
 					throw(product_ref_not_found)
@@ -188,21 +201,33 @@ bucket_adjustment(ProductRef, OldBucketRefs, OldBuckets, NewBuckets) ->
 	DelBucketAdj ++ UpdatedBucketAdj.
 
 %% @private
-if_dues([{Name, DueDate} | T], Prices, Now) ->
+	if_dues(ProdRef, [{Name, DueDate} | T], Prices, Now) ->
 	case price_schedule(Name, Prices) of
 		{Period, MonthDay} ->
-			case ocs:payment_due_date(DueDate, Period, MonthDay) < Now of
+			EffectiveDueDate = ocs:payment_due_date(DueDate, Period, MonthDay),
+			error_logger:info_report(["Scheduler recurring payment evaluation",
+					{module, ?MODULE}, {product_id, ProdRef}, {price_name, Name},
+					{period, Period}, {month_day, MonthDay},
+					{due_date, DueDate}, {effective_due_date, EffectiveDueDate},
+					{now, Now}, {decision, case EffectiveDueDate < Now of true -> due; false -> not_due end}]),
+			case EffectiveDueDate < Now of
 				true ->
 					true;
 				false ->
-					if_dues(T, Prices, Now)
+					if_dues(ProdRef, T, Prices, Now)
 			end;
 		undefined when DueDate < Now ->
+			error_logger:info_report(["Scheduler recurring payment fallback due",
+					{module, ?MODULE}, {product_id, ProdRef}, {price_name, Name},
+					{due_date, DueDate}, {now, Now}, {decision, due_no_schedule}]),
 			true;
 		undefined ->
-			if_dues(T, Prices, Now)
+			error_logger:info_report(["Scheduler recurring payment missing schedule",
+					{module, ?MODULE}, {product_id, ProdRef}, {price_name, Name},
+					{due_date, DueDate}, {now, Now}, {decision, not_due_no_schedule}]),
+			if_dues(ProdRef, T, Prices, Now)
 	end;
-if_dues([], _Prices, _Now)  ->
+	if_dues(_ProdRef, [], _Prices, _Now)  ->
 	false.
 
 %% @private
