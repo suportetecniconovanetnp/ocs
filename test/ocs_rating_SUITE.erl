@@ -118,7 +118,8 @@ all() ->
 	roaming_table_sms_ecur, roaming_table_sms_iec, roaming_table_sms_iec_rsu,
 	final_empty_mscc, final_empty_mscc_multiple_services,
 	final_empty_service_rating,
-	initial_invalid_service_type, refund_unused_reservation,
+	initial_invalid_service_type, initial_price_not_found,
+	refund_unused_reservation,
 	refund_partially_used_reservation, tariff_prices,
 	allowance_bucket, tariff_bucket_voice,
 	tariff_bucket_iec, tariff_bucket_ecur,
@@ -2712,6 +2713,23 @@ initial_invalid_service_type(_Config) ->
 			undefined, undefined, [ServiceId], Timestamp, undefined, undefined,
 			initial, [], [], SId).
 
+initial_price_not_found() ->
+	[{userdata, [{doc, "Return price_not_found when rating has no applicable prices"}]}].
+
+initial_price_not_found(_Config) ->
+	ServiceId = ocs:generate_identity(),
+	OfferId = add_offer([], 8),
+	ProdRef = add_product(OfferId),
+	{ok, #service{}} = ocs:add_service([ServiceId], undefined, ProdRef, []),
+	Ref = erlang:ref_to_list(make_ref()),
+	SId = diameter:session_id(Ref),
+	Timestamp = calendar:local_time(),
+	Protocol = protocol(),
+	ServiceType = service_type(Protocol, data),
+	{error, price_not_found} = ocs_rating:rate(Protocol, ServiceType, undefined,
+			undefined, undefined, [ServiceId], Timestamp, undefined, undefined,
+			initial, [], [{octets, 1000000}], SId).
+
 refund_unused_reservation() ->
 	[{userdata, [{doc, "Refund unused reservation"}]}].
 
@@ -3975,4 +3993,3 @@ validate_balance2(Amount, [#bucket{remain_amount = RA} | T]) ->
 	validate_balance2(Amount - RA, T);
 validate_balance2(_Amount, []) ->
 	ct:fail(remain_amount).
-

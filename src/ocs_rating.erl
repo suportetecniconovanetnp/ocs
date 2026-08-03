@@ -181,27 +181,33 @@ rate(Protocol, ServiceType, ServiceId, ChargingKey,
 									balance = BucketRefs} = Product] ->
 								Now = erlang:system_time(millisecond),
 								case mnesia:dirty_read(offer, OfferId) of
-									[#offer{char_value_use = CharValueUse,
-													end_date = EndDate, start_date = StartDate} = Offer]
+									[#offer{} = Offer0] ->
+										Offer = ocs:normalize_offer(Offer0),
+										case Offer of
+											#offer{char_value_use = CharValueUse,
+														end_date = EndDate, start_date = StartDate}
 											when ((StartDate =< Now) or (StartDate == undefined)),
 													((EndDate > Now) or (EndDate == undefined)) ->
-										Buckets = lists:flatten([mnesia:read(bucket, Id, sticky_write)
-												|| Id <- BucketRefs]),
-										RedirectServerAddress = case lists:keyfind("redirectServer",
-												#char_value_use.name, CharValueUse) of
-											#char_value_use{values = [#char_value{value = Value}]}
-													when is_list(Value) ->
-												Value;
-											_Other ->
-												undefined
-										end,
-										NewBuckets = lists:map(fun ocs:parse_bucket/1, Buckets),
-										RateResult = rate1(Protocol, Service, ServiceId, Product,
-												NewBuckets, Timestamp, Address, Direction, Offer,
-												Flag, DebitAmounts, ReserveAmounts, ServiceType,
-												SessionAttributes, ChargingKey,
-												ServiceNetwork),
-										{RateResult, RedirectServerAddress};
+												Buckets = lists:flatten([mnesia:read(bucket, Id, sticky_write)
+														|| Id <- BucketRefs]),
+												RedirectServerAddress = case lists:keyfind("redirectServer",
+														#char_value_use.name, CharValueUse) of
+													#char_value_use{values = [#char_value{value = Value}]}
+															when is_list(Value) ->
+														Value;
+													_Other ->
+														undefined
+												end,
+												NewBuckets = lists:map(fun ocs:parse_bucket/1, Buckets),
+												RateResult = rate1(Protocol, Service, ServiceId, Product,
+														NewBuckets, Timestamp, Address, Direction, Offer,
+														Flag, DebitAmounts, ReserveAmounts, ServiceType,
+														SessionAttributes, ChargingKey,
+														ServiceNetwork),
+												{RateResult, RedirectServerAddress};
+											_ ->
+												mnesia:abort(offer_not_found)
+										end;
 									_ ->
 										mnesia:abort(offer_not_found)
 								end;
@@ -489,8 +495,9 @@ charge(Protocol, Flag, SubscriberIDs, ServiceId, ChargingKey,
 						case mnesia:read(product, ProdRef, read) of
 							[#product{product = OfferId, balance = BucketRefs} = Product] ->
 								case mnesia:read(offer, OfferId, read) of
-									[#offer{name = OfferName,
-											char_value_use = CharValueUse} = _Offer] ->
+									[#offer{} = Offer0] ->
+										#offer{name = OfferName,
+												char_value_use = CharValueUse} = ocs:normalize_offer(Offer0),
 										Buckets = lists:flatten([mnesia:read(bucket, Id, sticky_write)
 												|| Id <- BucketRefs]),
 										RedirectServerAddress = case lists:keyfind("redirectServer",
@@ -556,6 +563,10 @@ charge(Protocol, Flag, SubscriberIDs, ServiceId, ChargingKey,
 
 %% @doc Split and order buckets.
 %% @hidden
+charge1(_Protocol, _Flag, _Service, _ServiceId, _Product, _Buckets,
+		[] = _Prices, _DebitAmounts, _ReserveAmounts, _SessionId,
+		_ChargingKey, _Address, _ServiceNetwork, _Rated) ->
+	mnesia:abort(price_not_found);
 charge1(_Protocol, final = Flag, Service, ServiceId, Product, Buckets,
 		[#price{units = Units} | _ ] = _Prices,
 		[] = _DebitAmounts, ReserveAmounts, SessionId, ChargingKey,
@@ -2004,7 +2015,8 @@ authorize1(radius, ServiceType,
 			case lists:any(F, get_session_id(SessionAttributes)) of
 				true ->
 					case mnesia:read(offer, OfferId, read) of
-						[#offer{char_value_use = CharValueUse} = Offer] ->
+						[#offer{} = Offer0] ->
+							#offer{char_value_use = CharValueUse} = Offer = ocs:normalize_offer(Offer0),
 							F2 = fun(#char_value_use{name = "radiusReserveSessionTime",
 											values = [CharValue]}) ->
 										case CharValue of
@@ -2072,7 +2084,10 @@ authorize2(radius = Protocol, ServiceType,
 	try
 		F = fun(#bundled_po{name = OfferId}, Acc) ->
 				case mnesia:read(offer, OfferId, read) of
-					[#offer{specification = Spec, status = Status} = P] when
+					[#offer{} = Offer0] ->
+						P = ocs:normalize_offer(Offer0),
+						case P of
+							#offer{specification = Spec, status = Status} when
 							((Status == active) orelse (Status == undefined))
 							and
 							(((Protocol == radius)
@@ -2081,7 +2096,10 @@ authorize2(radius = Protocol, ServiceType,
 								((Spec == "5") orelse (Spec == "9"))) orelse
 								(((ServiceType == ?RADIUSFRAMED) orelse (ServiceType == ?RADIUSLOGIN)) and
 								((Spec == "4") orelse (Spec == "8")))))) ->
-						[P | Acc];
+								[P | Acc];
+							_ ->
+								Acc
+						end;
 					_ ->
 						Acc
 				end
